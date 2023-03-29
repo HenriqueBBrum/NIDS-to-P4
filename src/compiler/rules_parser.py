@@ -44,8 +44,10 @@ def read_rules(rule_file):
             # if filter_negation:
             #     if '!' in rule:
             #         continue
+            rule = Parser(line).header
+            parsed_rules.append(rule)
 
-            parsed_rules.append(Parser(line))
+            break
 
     return parsed_rules
 

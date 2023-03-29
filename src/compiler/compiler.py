@@ -25,10 +25,9 @@ def main(config_path, rules_path):
     # exclude_sids = [254] ## Review why Kairo did this
 
     ignored_rule_files = []
-    rules = get_rules(rules_path, ignored_rule_files) # Get all rules from multiple files
-    #files = get_rules_files_list(rules_path)
     # # Step 1) Parse rules from files
-    # rules = parse_rules_from_multiple_files(files, filter_negation=True)
+    rules = get_rules(rules_path, ignored_rule_files) # Get all rules from multiple files or just one
+
     # print(len(rules))
 
 
