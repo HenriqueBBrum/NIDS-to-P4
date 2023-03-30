@@ -10,7 +10,7 @@ import time
 ## Local imports
 from snort_config_parser import SnortConfiguration
 from rules_parser import get_rules
-# from rule_stats import RuleStatistics
+from rule_satistics import RuleStatistics
 # from utils import convert_ip_network_to_hex
 # from models import *
 # from port_mask import mask_range
@@ -27,13 +27,12 @@ def main(config_path, rules_path):
     ignored_rule_files = []
     # # Step 1) Parse rules from files
     rules = get_rules(rules_path, ignored_rule_files) # Get all rules from multiple files or just one
+    print(len(rules))
 
-    # print(len(rules))
-
-
-
-    # stats = RuleStatistics(rules, config)
-    # stats.print_all()
+    # for rule in rules:
+    #     print(rule["header"])
+    stats = RuleStatistics(rules, config)
+    stats.print_all()
 
 
     # time.sleep(1000)

@@ -1,43 +1,56 @@
 import re
 import ipaddress
 import collections
+import shlex
 from typing import Tuple, List, Dict, Any
 
-
-
 try:
-    from .dicts import Dicts
+    from .option_validation_dicts import Dicts
 except ImportError:
-    from dicts import Dicts
+    from compiler.snort_rule_parser.option_validation_dicts import Dicts
 
 
-class Parser(object):
-
-    def __init__(self, rule):
-        self.dicts = Dicts()
+### Class representing a rule.
+class Rule(object):
+    def __init__(self, rule, header, options, has_negation):
         self.rule = rule
-        self.header = self.parse_header()
-        # self.options = self.parse_options() 
 
-        # self.validate_options(self.options)
-        # self.data = {"header": self.header, "options": self.options}
-        # self.all = self.data
-        # self.has_negation = self.compute_negation()
+        self.header = header
+        self.options = options
+        self.has_negation = has_negation
 
-
-    def __iter__(self):
-        yield self.data
+        self.data = {"header": self.header, "options": self.options}
+        self.all = self.data
 
     def __getitem__(self, key):
         if key == 'all':
             return self.data
         else:
             return self.data[key]
+        
+### 
+#   Parses a Snort/Suricata rule and returns two dictionaris:
+#       One containing the header values
+#       THe other containing the options values
+#   If there are invalid option in the rule an Error is raised. 
+###
+class Parser(object):
 
+    def __init__(self):
+        self.dicts = Dicts()
+    
+    def parse_rule(self, rule: str) -> Rule:
+        header, has_negation = self.parse_header(rule)
+        options = self.parse_options(rule) 
 
-    def parse_header(self):
-        if self.get_header():
-            header = self.get_header()
+        return Rule(rule, header, options, has_negation)
+
+    ### HEADER PARSING FUNCTIONS ###
+    # Parses the rule header, validates it, and returns a dictionary
+    def parse_header(self, rule):
+        if self.get_header(rule):
+            header = self.get_header(rule)
+            has_negation =  "!" in header
 
             # Remove whitespaces between list elements
             if re.search(r"[,\[\]]\s", header): 
@@ -55,19 +68,19 @@ class Parser(object):
             msg = "Snort rule header is malformed %s" % header
             raise ValueError(msg)
         
-        return self.header_list_to_dict(header)
+        return self.header_list_to_dict(header), has_negation
     
-    # Return string with following format: "action proto src_ip src_port direction dst_ip dst_port"
-    def get_header(self):
-        if re.match(r'(^[a-z|A-Z].+?)?(\(.+;\)|;\s\))', self.rule.lstrip()): #simplify
-            header = self.rule.split('(', 1)
+    # Returns a string with the following format: "action proto src_ip src_port direction dst_ip dst_port"
+    def get_header(self, rule):
+        if re.match(r'(^[a-z|A-Z].+?)?(\(.+;\)|;\s\))', rule.lstrip()): #simplify
+            header = rule.split('(', 1)
             return header[0]
         else:
             msg = 'Error in syntax, check if rule'\
-                  'has been closed properly %s ' % self.rule
+                  'has been closed properly %s ' % rule
             raise SyntaxError(msg)
-
-        
+    
+    # Receives a string "action proto src_ip src_port direction dst_ip dst_port", parses and validates each field, and returns a dictionary
     def header_list_to_dict(self, header):
         header_dict = collections.OrderedDict()
         for item in header:
@@ -85,7 +98,6 @@ class Parser(object):
                 
             if "src_port" not in header_dict:
                 header_dict["src_port"] = self.port(item)
-                print(header_dict["src_port"])
                 continue
 
             if "direction" not in header_dict:
@@ -100,9 +112,8 @@ class Parser(object):
                 header_dict["dst_port"] = self.port(item)
                 continue
 
-        print(header_dict)
-
         return header_dict
+
 
     @staticmethod
     def actions(action: str) -> str:
@@ -123,6 +134,7 @@ class Parser(object):
             msg = "Invalid action specified %s" % action
             raise ValueError(msg)
 
+
     @staticmethod
     def proto(proto: str) -> str:
         protos = {
@@ -137,6 +149,7 @@ class Parser(object):
         else:
             msg = "Unsupported Protocol %s " % proto
             raise ValueError(msg)
+
 
     # Parses IP input
     def ip(self, ip):
@@ -183,7 +196,11 @@ class Parser(object):
         if _not_nest:
             _ip_list = self. __form_ip_list(ip)
             return list_deny, _ip_list
-        
+
+    # Tranforms a string of IPs separated by "," into a list
+    def __form_ip_list(self, ip_list: str) -> List:
+        return [self.__ip_to_tuple(ip) for ip in ip_list.split(",")]
+   
     # Returns a tuple (Bool, IP) indicating if the IP is negated
     @staticmethod
     def __ip_to_tuple(ip: str) -> Tuple:
@@ -193,11 +210,6 @@ class Parser(object):
         else:
             return True, ip
         
-    # Tranforms a string of IPs separated by "," into a list
-    def __form_ip_list(self, ip_list: str) -> List:
-        return [self.__ip_to_tuple(ip) for ip in ip_list.split(",")]
-
-
     # Validate if the IP is either a OS variable (e.g. $HOME_NET) or a valid IPv4 or IPv6 address
     def __validate_ip(self, ips):
         variables = {
@@ -274,20 +286,20 @@ class Parser(object):
             _port_list = self. __form_port_list(port)
             return list_deny, _port_list
 
+    def __form_port_list(self, port_list: str) -> List:
+        return [self.__port_to_tuple(port) for port in port_list.split(",")]
+    
     @staticmethod
     def __port_to_tuple(port: str) -> Tuple:
-        if re.search(r':.*!|!.*:', port):
-            raise Exception("Range with negation")
+        if re.search(r':!', port):
+            raise Exception("Range with second element negated %s" % port)
         
         if port.startswith("!"):
             port = port.lstrip("!")
             return False, port
         else:
             return True, port
-        
-    def __form_port_list(self, port_list: str) -> List:
-        return [self.__port_to_tuple(port) for port in port_list.split(",")]
-        
+              
     def __validate_port(self, ports):
         variables = {"any", "$HTTP_PORTS"}
         for item in ports:
@@ -318,8 +330,8 @@ class Parser(object):
                     elif int(item) < 0 or int(item) > 65535:
                         raise ValueError("Port is out of range %s" % item)
         return True
-        
-        
+              
+            
     def direction(self, dst):
         destinations = {"->": "unidirectional",
                         "<>": "bidirectional"}
@@ -330,3 +342,66 @@ class Parser(object):
             msg = "Invalid destination variable %s" % dst
             raise ValueError(msg)
         
+
+    ### OPTIONS PARSING FUNCTIONS ###
+    # Parses the rule body or options, validates it and returns a dictionary
+    def parse_options(self, rule):
+            options_list = self.get_options(rule)
+            options_dict = collections.OrderedDict()
+            for index, option_string in enumerate(options_list):
+                if ':' in option_string:
+                    key, value = option_string.split(":", 1)
+                    value = shlex.split(value, ",")
+                    options_dict[index] = (key, value)
+                else:
+                    options_dict[index] = (option_string, "")
+
+            self.__validate_options(options_dict)
+            return options_dict
+    
+    # Turns the options string, i.e. "(<option>: <settings>; ... <option>: <settings>;)"), into a list of options
+    def get_options(self, rule):
+        options = "{}".format(rule.split('(', 1)[-1].lstrip().rstrip())
+        if not options.endswith(")"):
+            raise ValueError("Snort rule options is not closed properly, "
+                             "you have a syntax error")
+
+        op_list = list()
+        option = ""
+        last_char = ""
+
+        for char in options.rstrip(")"):
+            if char != ";":
+                option = option + char
+
+            if char == ";" and last_char != "\\":
+                op_list.append(option.strip())
+                option = ""
+
+            last_char = char
+        return op_list
+    
+    # Verifies if the option key is valid or if the classtype option has a valid value
+    def __validate_options(self, options):
+        for index, option in options.items():
+            key, value = option
+            
+            if len(value) == 1:
+                content_mod = self.dicts.content_modifiers(value[0])
+                opt = False
+                if content_mod:
+                    # An unfinished feature
+                    continue
+
+            valid_option = self.dicts.verify_option(key)
+            if not valid_option:
+                raise ValueError("Unrecognized option: %s" % key)
+            
+            if key=="classtype":
+                if len(value)>1:
+                    raise Exception("Multiple rule classification %s" % value)
+                classification = self.dicts.classtypes(value[0])
+                if not classification:
+                    raise ValueError("Unrecognized rule classification: %s" % value)
+
+        return options

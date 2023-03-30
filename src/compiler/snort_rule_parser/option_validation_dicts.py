@@ -1,9 +1,14 @@
+### 
+#    This file contains sets and dictionaries with the names of possible options and classification configs.
+#    Used for validating rules
+###
+
 from typing import Any
 
 
 class Dicts():
-
-    def classtypes(self, cltype):
+    @staticmethod
+    def classtypes(cltype: str = None):
         classtypes = {
                 "attempted-admin": "Attempted Administrator Privilege Gain",
                 "attempted-dos": "Attempted Denial of Service",
@@ -50,28 +55,8 @@ class Dicts():
         else:
             return False
 
-    ### set
-    @staticmethod 
-    def ip_variables(variable):
-        variables = {"$EXTERNAL_NET": "$EXTERNAL_NET",
-                     "$HTTP_SERVERS": "$HTTP_SERVERS",
-                     "$INTERNAL_NET": "$INTERNAL_NET",
-                     "$SQL_SERVERS": "$SQL_SERVERS",
-                     "$SMTP_SERVERS": "$SMTP_SERVERS",
-                     "$TELNET_SERVERS": "$TELNET_SERVERS",
-                     "$DNS_SERVERS": "$DNS_SERVERS",
-                     "$HOME_NET": "$HOME_NET",
-                     "any": "any"
-                     }
-
-        if variable in variables:
-            return variables[variable]
-        else:
-            return False
-
     @staticmethod
     def general_options(option: str = None) -> Any:
-        # TODO: maybe add Snort Default Classifications
         general_options = {"msg",
                            # The msg keyword tells the
                            # logging and alerting engine
@@ -122,7 +107,6 @@ class Dicts():
 
     @staticmethod
     def payload_detection(option: str = None) -> Any:
-
         payload_detection = {"content",
                              # The content keyword allows
                              # the user to set rules that search for specific
@@ -667,7 +651,6 @@ class Dicts():
 
     @staticmethod
     def rule_thresholds(option):
-
         threshold = {"threshold"}
 
         if option in threshold:
@@ -675,8 +658,7 @@ class Dicts():
         else:
             return False
 
-    def options(self, option):
-
+    def verify_option(self, option):
         # TODO: maybe add Snort Default Classifications
         general_options = self.general_options()
         payload_detection = self.payload_detection()
@@ -689,7 +671,7 @@ class Dicts():
         # type limit <<, but for now, this will have to suffice
         rule_tresholds = {"threshold": "threshold"}
 
-        # check if rule is of payload detect type
+        # Check if a rule option is a valid option type 
         if option in payload_detection:
             return "payload", option
         if option in non_payload_detect:
@@ -702,13 +684,3 @@ class Dicts():
             return "content_modifier", option
         if option in post_detect:
             return "post_detect", option
-
-    def get_options(self):
-        options = set()
-        return options.union(
-            self.general_options(),
-            self.payload_detection(),
-            self.content_modifiers(),
-            self.non_payload_options(),
-            self.post_detect_options()
-        )

@@ -1,0 +1,73 @@
+from collections import Counter
+
+class RuleStatistics:
+
+    def __init__(self, parsed_rules, config):
+        self.rules = parsed_rules
+        self.negation_stats = self.compute_negation_stats()
+        self.protocol_stats = self.compute_protocol_stats()
+        self.direction_stats = self.compute_direction_stats()
+        self.src_stats = self.compute_src_stats()
+        self.dst_stats = self.compute_dst_stats()
+        self.src_port_stats = self.compute_src_port_stats()
+        self.dst_port_stats = self.compute_dst_port_stats()
+        #self.priorities = self.compute_priorities(config)
+
+    def compute_protocol_stats(self):
+        result = [rule.header.get('proto') for rule in self.rules]
+        return Counter(result)
+
+    def compute_direction_stats(self):
+        result = [rule.header.get('direction') for rule in self.rules]
+        return Counter(result)
+    
+    ### NEEDS TO HAVE CONFIG IPs
+    def compute_negation_stats(self):
+        result = [rule.has_negation for rule in self.rules]
+        return {'non-negation': result.count(False), 'negation': result.count(True)}
+
+    def compute_src_stats(self):
+        result = [str(rule.header.get('source')[1]) for rule in self.rules]
+        return Counter(result)
+
+    def compute_dst_stats(self):
+        result = [str(rule.header.get('destination')[1]) for rule in self.rules]
+        return Counter(result)
+
+    def compute_src_port_stats(self):
+        result = [str(rule.header.get('src_port')[1]) for rule in self.rules]
+        return Counter(result)
+
+    def compute_dst_port_stats(self):
+        result = [str(rule.header.get('dst_port')[1]) for rule in self.rules]
+        return Counter(result)
+
+    def get_option_value(self, options, name, default):
+        result = default
+        for k, option in options.items():
+            key, value = option
+            if key == name:
+                result = value
+                break
+        if type(result) is not list:
+            return [result]
+        return result
+
+    def compute_priorities(self, config):
+        classtypes = [self.get_option_value(rule.options, 'classtype', 'unknown')[0] for rule in self.rules]
+        priorities = [config.classifications.get(classtype).get('priority') for classtype in classtypes]
+        return Counter(priorities)
+
+    def print_all(self):
+        print(self.negation_stats)
+        print(self.protocol_stats)
+        print(self.direction_stats)
+        print(self.src_stats)
+        print(self.dst_stats)
+        print()
+        print(self.src_port_stats)
+        print()
+        print(self.dst_port_stats)
+        print()
+        #print(self.priorities)
+

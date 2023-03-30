@@ -2,6 +2,7 @@
 ##  Works for Snort 2.* configuration (future versions will inlcude Snort 3.* and SUricata)
 
 import re
+# from compiler.snort_rule_parser.option_validation_dicts import Dicts
 
 class SnortConfiguration():
     ports = {}
@@ -11,7 +12,6 @@ class SnortConfiguration():
     MIN_PORT = 0
     MAX_PORT = 65535
 
-    
 
     def __init__(self, snort_version, configuration_dir):
         self.configuration_dir = configuration_dir
@@ -19,7 +19,6 @@ class SnortConfiguration():
 
         self.__parse()
     
-
 
     def __parse(self):
         if(self.snort_version == 2):
