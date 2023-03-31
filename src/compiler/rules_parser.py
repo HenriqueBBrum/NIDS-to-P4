@@ -33,3 +33,13 @@ def parse_rules(rule_file):
             parsed_rules.append(parser.parse_rule(line))
 
     return parsed_rules
+
+# Return rules with unique sid/rev
+def rules_to_sid_rev_map(parsed_rules):
+    rules_map = {}
+    for parsed_rule in parsed_rules:
+        sid = parsed_rule.options.get('sid', "0")["value"][0]
+        rev = parsed_rule.options.get('rev', "0")["value"][0]
+        key = f'{sid}/{rev}'
+        rules_map[key] = parsed_rule
+    return rules_map

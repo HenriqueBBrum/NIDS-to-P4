@@ -36,6 +36,9 @@ class Rule(object):
 ###
 class Parser(object):
 
+    MIN_PORT = 0
+    MAX_PORT = 65535
+
     def __init__(self):
         self.dicts = Dicts()
     
@@ -96,6 +99,7 @@ class Parser(object):
                 header_dict["source"] = self.ip(item)
                 continue
                 
+                
             if "src_port" not in header_dict:
                 header_dict["src_port"] = self.port(item)
                 continue
@@ -111,7 +115,6 @@ class Parser(object):
             if "dst_port" not in header_dict:
                 header_dict["dst_port"] = self.port(item)
                 continue
-
         return header_dict
 
 
@@ -151,64 +154,57 @@ class Parser(object):
             raise ValueError(msg)
 
 
-    # Parses IP input
     def ip(self, ip):
+        parsed_ips = {}
         if isinstance(ip, str):
-            ip = ip.strip('"')
-            if re.search(r",", ip):
-                item = self.__flatten_ip(ip)
-                ip = item
+            if ip == "any":
+                return {"0.0.0.0/0": True}
+            elif ip == "!any":
+                raise Exception("Invalid IP %s" % raw_ips)
+            
+            if re.search(r",|(!?\[.*\])", ip):
+                parsed_ips = self.__flatten_list(ip, self.__parse_ip)
             else:
-                ip = self.__ip_to_tuple(ip)
-
-            if self.__validate_ip(ip):
-                return ip
-            else:
+                parsed_ips = self.__parse_ip(ip, True)
+                
+            if not self.__validate_ip(parsed_ips):
                 raise ValueError("Unvalid ip or variable: %s" % ip)
             
-    # Flattens a list of ip or ip-placeholder that might contains a sub-list.
-    # If the sub-list has a sub-list this process is repeated until no sub-lists exists
-    # Does not work for two sub-lists on the same level
-    def __flatten_ip(self, ip):
-        list_deny = True
-        if ip.startswith("!"):
-            list_deny = False
-            ip = ip.lstrip("!")
-        _ip_list = []
-        _not_nest = True
-        ip = re.sub(r'^\[|\]$', '', ip)
-        ip = re.sub(r'"', '', ip)
-        if re.search(r"(\[.*\])", ip): # If there is(are) a sub-list(s) process it(them)
-            _not_nest = False
-            nest = re.split(r",(!?\[.*\])", ip)
-            nest = filter(None, nest)
-            _return_ips = []
-            for item in nest: 
-                if re.match(r"^\[|^!\[", item): # If there are more sub-lists in lower levels process them
-                    nested = self.__flatten_ip(item)
-                    _return_ips.append(nested)
-                    continue
-                else:
-                    _ip_list = self. __form_ip_list(item)
-                    for _ip in _ip_list:
-                        _return_ips.append(_ip)
-            return list_deny, _return_ips
-        if _not_nest:
-            _ip_list = self. __form_ip_list(ip)
-            return list_deny, _ip_list
+        return parsed_ips   
 
-    # Tranforms a string of IPs separated by "," into a list
-    def __form_ip_list(self, ip_list: str) -> List:
-        return [self.__ip_to_tuple(ip) for ip in ip_list.split(",")]
-   
-    # Returns a tuple (Bool, IP) indicating if the IP is negated
-    @staticmethod
-    def __ip_to_tuple(ip: str) -> Tuple:
-        if ip.startswith("!"):
-            ip = ip.lstrip("!")
-            return False, ip
+    def __flatten_list(self, _list, individual_parser):
+        list_deny = True
+        if _list.startswith("!"):
+            list_deny = False
+            _list = _list.lstrip("!")
+        _list = re.sub(r'^\[|\]$', '', _list)
+        _list = re.sub(r'"', '', _list)
+
+        return_list = {}
+        if re.search(r"(\[.*\])", _list): # If there is(are) a sub-list(s) process it(them)
+            nested_lists = re.split(r",(!?\[.*\])", _list)
+            nested_lists = filter(None, nested_lists)
+            for _lists in nested_lists: 
+                if re.match(r"^\[|^!\[", _lists): # If there are more sub-lists in lower levels process them # match is just the first one 
+                    flattened_lists = self.__flatten_list(_lists, self.__parse_ip)
+                    for key, value in flattened_lists.items():
+                        return_list[key] = bool(~(value ^ list_deny)+2)
+                else:
+                    for element in _lists.split(","):
+                        return_list.update(individual_parser(element, list_deny))
         else:
-            return True, ip
+            for element in _list.split(","):
+                return_list.update(individual_parser(element, list_deny))
+
+        return return_list
+     
+    def __parse_ip(self, ip, parent_bool) -> Dict:
+        local_bool = True
+        if ip.startswith("!"):
+            ip = ip[1:]
+            local_bool = False
+        
+        return {ip: bool(~(local_bool ^ parent_bool)+2)}
         
     # Validate if the IP is either a OS variable (e.g. $HOME_NET) or a valid IPv4 or IPv6 address
     def __validate_ip(self, ips):
@@ -226,96 +222,71 @@ class Parser(object):
             "HOME_NET",
             "any"
         }
-        for item in ips:
-            if isinstance(item, bool):
-                pass
 
-            if isinstance(item, list):
-                for ip in item:
-                    self.__validate_ip(ip)
-
-            if isinstance(item, str):
-                if item not in variables:
-                    ip_network = item.replace('[', '').replace(']', '')
-                    if "/" in item:
-                        ipaddress.ip_network(ip_network, False)
+        for ip, bool_ in ips.items():
+            if isinstance(ip, str):
+                if ip not in variables:
+                    if "/" in ip:
+                        ipaddress.ip_network(ip, False)
                     else:
-                        ipaddress.ip_address(ip_network)
+                        ipaddress.ip_address(ip)
         return True
     
 
     def port(self, port):
+        parsed_ports = {}
         if isinstance(port, str):
-            port = port.strip('"')
-            if re.search(r"\[", port):
-                item = self.__flatten_port(port)
-                port = item
+            if port == "any":
+                return {range(self.MIN_PORT, self.MAX_PORT): True}
+            elif port == "!any":
+                raise Exception("Invalid ports %s" % port)
+            
+            if re.search(r",|(!?\[.*\])", port):
+                parsed_ports = self.__flatten_list(port, self.__parse_port)
             else:
-                port = self.__port_to_tuple(port)
-
-            if self.__validate_port(port):
-                return port
-            else:
+                parsed_ports = self.__parse_port(port, True)
+                
+            if not self.__validate_port(parsed_ports):
                 raise ValueError("Unvalid port or variable: %s" % port)
-
-    def __flatten_port(self, port):
-        list_deny = True
+        return parsed_ports  
+     
+       
+    def __parse_port(self, port, parent_bool):
+        local_bool = True
         if port.startswith("!"):
-            list_deny = False
-            port = port.lstrip("!")
-        _port_list = []
-        _not_nest = True
-        port = re.sub(r'^\[|\]$', '', port)
-        port = re.sub(r'"', '', port)
-        if re.search(r"(\[.*\])", port): # If there is(are) a sub-list(s) process it(them)
-            _not_nest = False
-            nest = re.split(r",(!?\[.*\])", port)
-            nest = filter(None, nest)
-            _return_ports = []
-            for item in nest: 
-                if re.match(r"^\[|^!\[", item): # If there are more sub-lists in lower levels process them
-                    nested = self.__flatten_port(item)
-                    _return_ports.append(nested)
-                    continue
-                else:
-                    _port_list = self. __form_port_list(item)
-                    for _port in _port_list:
-                        _return_ports.append(_port)
-            return list_deny, _return_ports
-        if _not_nest:
-            _port_list = self. __form_port_list(port)
-            return list_deny, _port_list
+            port = port[1:]
+            local_bool = False
 
-    def __form_port_list(self, port_list: str) -> List:
-        return [self.__port_to_tuple(port) for port in port_list.split(",")]
-    
-    @staticmethod
-    def __port_to_tuple(port: str) -> Tuple:
-        if re.search(r':!', port):
-            raise Exception("Range with second element negated %s" % port)
+        if re.match(r'^(!?[0-9]+:|:[0-9]+)', port):
+            range_ = port.split(":")
+            if len(range_) != 2 or "!" in range_[1] :
+                raise ValueError("Wrong range values")
+            
+            if range_[1] == "":
+                return{range(int(range_[0]), self.MAX_PORT): bool(~(local_bool ^ parent_bool)+2)}
+            elif range_[0] == "":
+                return{range(self.MIN_PORT, int(range_[1])): bool(~(local_bool ^ parent_bool)+2)}
+            
+            lower_bound = int(range_[0]) if int(range_[0]) > self.MIN_PORT else self.MIN_PORT
+            upper_bound = int(range_[1]) if int(range_[1]) > self.MIN_PORT else self.MIN_PORT
+            return {range(lower_bound, upper_bound): bool(~(local_bool ^ parent_bool)+2) }
         
-        if port.startswith("!"):
-            port = port.lstrip("!")
-            return False, port
-        else:
-            return True, port
-              
+        return {port: bool(~(local_bool ^ parent_bool)+2)}
+    
+                
     def __validate_port(self, ports):
         variables = {"any", "$HTTP_PORTS"}
-        for item in ports:
-            if isinstance(item, bool):
-                pass
 
-            if isinstance(item, list):
-                for port_list_item in item:
-                    self.__validate_port(port_list_item)
-
-            if isinstance(item, str):
-                if item not in variables and not re.search(r"^\$+", item):
-                    if re.search(":", item):
-                        range_elements = item.split(":", 1)
+        for key, value in ports.items():
+            if isinstance(key, str):
+                if key not in variables and not re.match(r"^\$+", key):
+                    if re.search(":", key):
+                        range_ = key.split(":")
+                        if len(range_) != 2 or "!" in range_[1] :
+                            raise ValueError("Wrong range values")
+                        
                         open_range = False
-                        for element in range_elements:
+                        for element in range_:
                             if not element:
                                 open_range = True
                                 continue
@@ -324,14 +295,19 @@ class Parser(object):
                             
                             if int(element) < 0 or int(element) > 65535:
                                 raise ValueError("Port is out of range %s" % element)
+                            
                         if(not open_range):
-                            if(int(range_elements[0]) > int(range_elements[-1])):
-                                raise ValueError("Port range is malformed %s" % item)
-                    elif int(item) < 0 or int(item) > 65535:
-                        raise ValueError("Port is out of range %s" % item)
+                            if(int(range_[0]) > int(range_[-1])):
+                                raise ValueError("Port range is malformed %s" % key)
+                            
+                    elif int(key) < 0 or int(key) > 65535:
+                        raise ValueError("Port is out of range %s" % key)
         return True
               
-            
+
+
+
+
     def direction(self, dst):
         destinations = {"->": "unidirectional",
                         "<>": "bidirectional"}
@@ -352,9 +328,9 @@ class Parser(object):
                 if ':' in option_string:
                     key, value = option_string.split(":", 1)
                     value = shlex.split(value, ",")
-                    options_dict[index] = (key, value)
+                    options_dict[key] = {"value": value, "index": index}
                 else:
-                    options_dict[index] = (option_string, "")
+                    options_dict[option_string] = {"value": "", "index": index}
 
             self.__validate_options(options_dict)
             return options_dict
@@ -383,8 +359,8 @@ class Parser(object):
     
     # Verifies if the option key is valid or if the classtype option has a valid value
     def __validate_options(self, options):
-        for index, option in options.items():
-            key, value = option
+        for key, data in options.items():
+            value = data["value"]
             
             if len(value) == 1:
                 content_mod = self.dicts.content_modifiers(value[0])

@@ -9,7 +9,7 @@ import time
 
 ## Local imports
 from snort_config_parser import SnortConfiguration
-from rules_parser import get_rules
+from rules_parser import get_rules, rules_to_sid_rev_map
 from rule_satistics import RuleStatistics
 # from utils import convert_ip_network_to_hex
 # from models import *
@@ -21,28 +21,31 @@ from rule_satistics import RuleStatistics
 
 def main(config_path, rules_path):
     config = SnortConfiguration(snort_version=2, configuration_dir=config_path)
+    # for item in config.ip_addresses.items():
+    #     print(item)
+
+    # for item in config.ports.items():
+    #     print(item)
 
     # exclude_sids = [254] ## Review why Kairo did this
 
     ignored_rule_files = []
-    # # Step 1) Parse rules from files
+    # Step 1) Parse rules from files
     rules = get_rules(rules_path, ignored_rule_files) # Get all rules from multiple files or just one
-    print(len(rules))
+    #print(len(rules))
 
-    # for rule in rules:
-    #     print(rule["header"])
-    stats = RuleStatistics(rules, config)
-    stats.print_all()
+    for rule in rules:
+        print(rule["header"])
+    # stats = RuleStatistics(rules, config)
+    # # stats.print_all()
 
-
-    # time.sleep(1000)
+    # # time.sleep(1000)
 
 
     # rules_sid_rev_map = rules_to_sid_rev_map(rules)
-    # print(rules_sid_rev_map)
     # # Step 2) Transform rules based on config
     # transformed_rules = transform_rules_on_config(rules, config)
-    # # Step 3) Filter transformed rules
+    # Step 3) Filter transformed rules
     # transformed_rules_filtered = [rule for rule in transformed_rules
     #                               if rule.header.get("direction") == 'unidirectional' and
     #                               not is_wildcard(rule) and
@@ -135,52 +138,72 @@ def main(config_path, rules_path):
 
 
 
+
+
+def get_option_value(options, name, default):
+    result = default
+    for k, option in options.items():
+        key, value = option
+        if key == name:
+            result = value
+            break
+    if type(result) is not list:
+        return [result]
+    return result
+
+def transform_value(include, value, vars, is_port):
+    if include:
+        if type(value) is list:
+            result = []
+            for v in value:
+                if type(v) is tuple:
+                    include_new, value_new = v
+                    result.extend(transform_value(include_new, value_new, vars, is_port))
+            return result
+
+        if "$" in value:
+            key_var = value.replace('$', '')
+            new_value = vars.get(key_var, "ERROR")
+            return new_value
+
+        if not is_port and value == "any":
+            return ['0.0.0.0/0']
+
+        if not is_port and type(value) is str:
+            return [value]
+
+        if is_port and value == "any":
+            return [-1]
+
+        if not is_port:
+            return config.parse_ipvar(value)
+
+        return config.parser_port_var(value)
+    else:
+        # TODO
+        return config.parser_port_var(value)
+
+def set_rule_value(rule, key, vars, is_port):
+    include, value = rule.header.get(key)
+    print(include, value)
+    exit()
+    rule.header[key] = transform_value(include, value, vars, is_port)
+
+
 def transform_rules_on_config(rules, config):
     rules_copy = copy.deepcopy(rules)
 
-    def transform_value(include, value, vars, is_port):
-        if include:
-            if type(value) is list:
-                result = []
-                for v in value:
-                    if type(v) is tuple:
-                        include_new, value_new = v
-                        result.extend(transform_value(include_new, value_new, vars, is_port))
-                return result
-
-            if "$" in value:
-                key_var = value.replace('$', '')
-                new_value = vars.get(key_var, "ERROR")
-                return new_value
-
-            if not is_port and value == "any":
-                return ['0.0.0.0/0']
-
-            if not is_port and type(value) is str:
-                return [value]
-
-            if is_port and value == "any":
-                return [-1]
-
-            if not is_port:
-                return config.parse_ipvar(value)
-
-            return config.parser_port_var(value)
-        else:
-            # TODO
-            return config.parser_port_var(value)
-
-    def set_rule_value(rule, key, vars, is_port):
-        include, value = rule.header.get(key)
-        rule.header[key] = transform_value(include, value, vars, is_port)
-
+    print(config.ip_addresses)
     for rule in rules_copy:
-        set_rule_value(rule, 'source', config.ipaddress, False)
+        set_rule_value(rule, 'source', config.ip_addresses, False)
         set_rule_value(rule, 'src_port', config.ports, True)
-        set_rule_value(rule, 'destination', config.ipaddress, False)
+        set_rule_value(rule, 'destination', config.ip_addresses, False)
         set_rule_value(rule, 'dst_port', config.ports, True)
 
     return rules_copy
+
+
+
 
 
 def transform_rules_on_port_range(rules, config):
@@ -208,17 +231,6 @@ def grouped_rules_to_p4(config, grouped_rules):
         # gc.collect()
     return rules
 
-
-def get_option_value(options, name, default):
-    result = default
-    for k, option in options.items():
-        key, value = option
-        if key == name:
-            result = value
-            break
-    if type(result) is not list:
-        return [result]
-    return result
 
 
 def parsed_rule_to_p4(config, parsed_rule):
@@ -379,14 +391,6 @@ def contains_ipv6(rule):
     return False
 
 
-def rules_to_sid_rev_map(parsed_rules):
-    rules_map = {}
-    for parsed_rule in parsed_rules:
-        sid = get_option_value(parsed_rule.options, 'sid', "0")[0]
-        rev = get_option_value(parsed_rule.options, 'rev', "0")[0]
-        key = f'{sid}/{rev}'
-        rules_map[key] = parsed_rule
-    return rules_map
 
 
 def is_rule_within(rule1, rule2):
