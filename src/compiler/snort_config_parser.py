@@ -53,7 +53,6 @@ class SnortConfiguration():
 
     ### TODO parse with more than 1 sub list in the same level i.e [[], [[], []]]. Needed?
     ### TODO validate input line
-    ### TODO verify any inconsistencies, for example:(21, TRUE) and (22, True)
     def __parse_ips(self, raw_ips):
         if raw_ips == "any":
             return {"0.0.0.0/0": True}
@@ -125,6 +124,8 @@ class SnortConfiguration():
 
         return parsed_ports   
 
+
+
     # Parses a raw port 
     def __parse_port(self, raw_port, parent_bool):
         local_bool = True
@@ -141,17 +142,17 @@ class SnortConfiguration():
             return return_ports
         elif re.match(r'^(!?[0-9]+:|:[0-9]+)', raw_port):
             range_ = raw_port.split(":")
-            if len(range_) != 2 or "!" in range_[1] :
+            if len(range_) != 2 or "!" in range_[1]:
                 raise ValueError("Wrong range values")
             
             if range_[1] == "":
-                return{range(int(range_[0]), self.MAX_PORT): bool(~(local_bool ^ parent_bool)+2)}
+                return{str(k): bool(~(local_bool ^ parent_bool)+2) for k in range(int(range_[0]), self.MAX_PORT)}
             elif range_[0] == "":
-                return{range(self.MIN_PORT, int(range_[1])): bool(~(local_bool ^ parent_bool)+2)}
+                return{str(k): bool(~(local_bool ^ parent_bool)+2) for k in range(self.MIN_PORT, int(range_[1]))}
             
             lower_bound = int(range_[0]) if int(range_[0]) > self.MIN_PORT else self.MIN_PORT
             upper_bound = int(range_[1]) if int(range_[1]) > self.MIN_PORT else self.MIN_PORT
-            return {range(lower_bound, upper_bound): bool(~(local_bool ^ parent_bool)+2) }
+            return {str(k): bool(~(local_bool ^ parent_bool)+2) for k in range(lower_bound, upper_bound)}
          
         return {raw_port: bool(~(local_bool ^ parent_bool)+2)}
 

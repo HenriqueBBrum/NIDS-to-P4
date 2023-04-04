@@ -43,16 +43,16 @@ class Parser(object):
         self.dicts = Dicts()
     
     def parse_rule(self, rule: str) -> Rule:
-        header, has_negation = self.parse_header(rule)
-        options = self.parse_options(rule) 
+        header, has_negation = self.__parse_header(rule)
+        options = self.__parse_options(rule) 
 
         return Rule(rule, header, options, has_negation)
 
     ### HEADER PARSING FUNCTIONS ###
     # Parses the rule header, validates it, and returns a dictionary
-    def parse_header(self, rule):
-        if self.get_header(rule):
-            header = self.get_header(rule)
+    def __parse_header(self, rule):
+        if self.__get_header(rule):
+            header = self.__get_header(rule)
             has_negation =  "!" in header
 
             # Remove whitespaces between list elements
@@ -71,10 +71,10 @@ class Parser(object):
             msg = "Snort rule header is malformed %s" % header
             raise ValueError(msg)
         
-        return self.header_list_to_dict(header), has_negation
+        return self.__header_list_to_dict(header), has_negation
     
     # Returns a string with the following format: "action proto src_ip src_port direction dst_ip dst_port"
-    def get_header(self, rule):
+    def __get_header(self, rule):
         if re.match(r'(^[a-z|A-Z].+?)?(\(.+;\)|;\s\))', rule.lstrip()): #simplify
             header = rule.split('(', 1)
             return header[0]
@@ -84,42 +84,42 @@ class Parser(object):
             raise SyntaxError(msg)
     
     # Receives a string "action proto src_ip src_port direction dst_ip dst_port", parses and validates each field, and returns a dictionary
-    def header_list_to_dict(self, header):
+    def __header_list_to_dict(self, header):
         header_dict = collections.OrderedDict()
         for item in header:
             if "action" not in header_dict:
-                header_dict["action"] = self.actions(item)
+                header_dict["action"] = self.__actions(item)
                 continue
 
             if "proto" not in header_dict:
-                header_dict["proto"] = self.proto(item)
+                header_dict["proto"] = self.__proto(item)
                 continue
                
             if "source" not in header_dict:
-                header_dict["source"] = self.ip(item)
+                header_dict["source"] = self.__ip(item)
                 continue
                 
                 
             if "src_port" not in header_dict:
-                header_dict["src_port"] = self.port(item)
+                header_dict["src_port"] = self.__port(item)
                 continue
 
             if "direction" not in header_dict:
-                header_dict["direction"] = self.direction(item)
+                header_dict["direction"] = self.__direction(item)
                 continue
 
             if "destination" not in header_dict:
-                header_dict["destination"] = self.ip(item)
+                header_dict["destination"] = self.__ip(item)
                 continue
 
             if "dst_port" not in header_dict:
-                header_dict["dst_port"] = self.port(item)
+                header_dict["dst_port"] = self.__port(item)
                 continue
         return header_dict
 
 
     @staticmethod
-    def actions(action: str) -> str:
+    def __actions(action: str) -> str:
         actions = {
             "alert",
             "log",
@@ -139,7 +139,7 @@ class Parser(object):
 
 
     @staticmethod
-    def proto(proto: str) -> str:
+    def __proto(proto: str) -> str:
         protos = {
             "tcp",
             "udp",
@@ -154,7 +154,7 @@ class Parser(object):
             raise ValueError(msg)
 
 
-    def ip(self, ip):
+    def __ip(self, ip):
         parsed_ips = {}
         if isinstance(ip, str):
             if ip == "any":
@@ -233,7 +233,7 @@ class Parser(object):
         return True
     
 
-    def port(self, port):
+    def __port(self, port):
         parsed_ports = {}
         if isinstance(port, str):
             if port == "any":
@@ -259,17 +259,17 @@ class Parser(object):
 
         if re.match(r'^(!?[0-9]+:|:[0-9]+)', port):
             range_ = port.split(":")
-            if len(range_) != 2 or "!" in range_[1] :
+            if len(range_) != 2 or "!" in range_[1]:
                 raise ValueError("Wrong range values")
             
             if range_[1] == "":
-                return{range(int(range_[0]), self.MAX_PORT): bool(~(local_bool ^ parent_bool)+2)}
+                return{str(k): bool(~(local_bool ^ parent_bool)+2) for k in range(int(range_[0]), self.MAX_PORT)}
             elif range_[0] == "":
-                return{range(self.MIN_PORT, int(range_[1])): bool(~(local_bool ^ parent_bool)+2)}
+                return{str(k): bool(~(local_bool ^ parent_bool)+2) for k in range(self.MIN_PORT, int(range_[1]))}
             
             lower_bound = int(range_[0]) if int(range_[0]) > self.MIN_PORT else self.MIN_PORT
             upper_bound = int(range_[1]) if int(range_[1]) > self.MIN_PORT else self.MIN_PORT
-            return {range(lower_bound, upper_bound): bool(~(local_bool ^ parent_bool)+2) }
+            return {str(k): bool(~(local_bool ^ parent_bool)+2) for k in range(lower_bound, upper_bound)}
         
         return {port: bool(~(local_bool ^ parent_bool)+2)}
     
@@ -306,9 +306,7 @@ class Parser(object):
               
 
 
-
-
-    def direction(self, dst):
+    def __direction(self, dst):
         destinations = {"->": "unidirectional",
                         "<>": "bidirectional"}
 
@@ -321,8 +319,8 @@ class Parser(object):
 
     ### OPTIONS PARSING FUNCTIONS ###
     # Parses the rule body or options, validates it and returns a dictionary
-    def parse_options(self, rule):
-            options_list = self.get_options(rule)
+    def __parse_options(self, rule):
+            options_list = self.__get_options(rule)
             options_dict = collections.OrderedDict()
             for index, option_string in enumerate(options_list):
                 if ':' in option_string:
@@ -336,7 +334,7 @@ class Parser(object):
             return options_dict
     
     # Turns the options string, i.e. "(<option>: <settings>; ... <option>: <settings>;)"), into a list of options
-    def get_options(self, rule):
+    def __get_options(self, rule):
         options = "{}".format(rule.split('(', 1)[-1].lstrip().rstrip())
         if not options.endswith(")"):
             raise ValueError("Snort rule options is not closed properly, "

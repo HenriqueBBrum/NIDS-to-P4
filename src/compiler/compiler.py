@@ -10,7 +10,7 @@ import time
 ## Local imports
 from snort_config_parser import SnortConfiguration
 from rules_parser import get_rules, rules_to_sid_rev_map
-from rule_satistics import RuleStatistics
+from rule_statistics import RuleStatistics
 # from utils import convert_ip_network_to_hex
 # from models import *
 # from port_mask import mask_range
@@ -21,41 +21,26 @@ from rule_satistics import RuleStatistics
 
 def main(config_path, rules_path):
     config = SnortConfiguration(snort_version=2, configuration_dir=config_path)
-    # for item in config.ip_addresses.items():
-    #     print(item)
-
-    # for item in config.ports.items():
-    #     print(item)
-
-    # exclude_sids = [254] ## Review why Kairo did this
-
     ignored_rule_files = []
     # Step 1) Parse rules from files
+    print("Getting and parsing rules.....")
     rules = get_rules(rules_path, ignored_rule_files) # Get all rules from multiple files or just one
-    #print(len(rules))
 
-    for rule in rules:
-        print(rule["header"])
+  
     # stats = RuleStatistics(rules, config)
-    # # stats.print_all()
-
-    # # time.sleep(1000)
+    # stats.print_all()
 
 
     # rules_sid_rev_map = rules_to_sid_rev_map(rules)
-    # # Step 2) Transform rules based on config
-    # transformed_rules = transform_rules_on_config(rules, config)
-    # Step 3) Filter transformed rules
-    # transformed_rules_filtered = [rule for rule in transformed_rules
-    #                               if rule.header.get("direction") == 'unidirectional' and
-    #                               not is_wildcard(rule) and
-    #                               not is_sid_excluded(rule, exclude_sids) and
-    #                               not contains_ipv6(rule) and
-    #                               get_rule_priority(rule) >= 1]
-    
 
-    # # Step 4) Transform rules
-    # transformed_rules_grouped = transform_rules_on_port_range(transformed_rules_filtered, config)
+    # Step 2) Substitute system variables for real IPs based on Snort config
+    new_rules = update_rules_ip_and_ports(rules, config)
+
+    for rule in new_rules:
+        print(rule.header["src_port"])
+
+    # Step 4) Transform rules
+    transformed_rules_grouped = group_ports(new_rules, config)
     # # Step 5) Transform to P4 and group by range
     # p4_rules = grouped_rules_to_p4(config, transformed_rules_grouped)
     # # Step 6) Deduplicate rules
@@ -138,6 +123,124 @@ def main(config_path, rules_path):
 
 
 
+def update_rules_ip_and_ports(rules, config):
+    rules_copy = copy.deepcopy(rules)
+    print(80*"*")
+    for rule in rules_copy:
+        rule.header['source'] = _update_rule_ip_and_ports(rule.header['source'],  config.ip_addresses, False)
+        rule.header['src_port'] = _update_rule_ip_and_ports(rule.header['src_port'], config.ports, True)
+        rule.header['destination'] = _update_rule_ip_and_ports(rule.header['destination'], config.ip_addresses, False)
+        rule.header['dst_port'] = _update_rule_ip_and_ports(rule.header['dst_port'], config.ports, True)
+
+    return rules_copy
+
+# Substitute system variables for the real IPs in the config file and group ports into range
+def _update_rule_ip_and_ports(header_field_dict, config_variables, is_port):
+    var_sub_results = {}
+    grouped_result = {}
+    for key, bool_ in header_field_dict.items():
+        if "$" in key:
+            key_temp = key.replace('$', '')
+            variable_values = config_variables.get(key_temp, "ERROR")
+            if not bool_:
+                for variable_value, variable_value_bool in variable_values:
+                    variable_values[variable_value] =  bool(~(bool_ ^ variable_value_bool)+2)
+
+            var_sub_results.update(variable_values)
+        else:
+            var_sub_results[key] = bool_
+
+    if is_port:
+        grouped_result = group_ports_into_ranges(var_sub_results)
+    else:
+        grouped_result = var_sub_results
+           
+
+    return grouped_result
+
+
+
+def group_ports_into_ranges(ports):
+    count = 0
+    initial_port = -1
+    grouped_ports = {}
+    ports_list = list(enumerate(ports.items())) # Creates a list of all ports
+    sorted_port_list = sorted(ports_list, key=lambda x:x[1][0]) # Sorts the list according to the port value (index, (port, bool))
+    for index, item in sorted_port_list:
+        if count == 0:
+            initial_port = item[0]
+            bool_ = item[1]
+
+        if isinstance(initial_port, range):
+            return {initial_port: bool_}
+
+        try:
+            next_tuple= sorted_port_list[index+1][1]
+        except Exception as e:
+            print(e)
+            next_tuple= (-1, False)
+        
+        if int(item[0]) == int(next_tuple[0]) - 1 and item[1]==next_tuple[1]:
+            count+=1
+        else:
+            if count == 0:
+                grouped_ports[initial_port] = bool_
+                continue
+            
+            grouped_ports[range(int(initial_port), int(initial_port)+count)] = bool_
+            count = 0
+            initial_port = -1
+    return grouped_ports
+
+
+
+
+
+# Not supported
+#     + - ALL flag, match on all specified flags plus any others
+#     * - ANY flag, match on any of the specified flags
+#     ! - NOT flag, match if the specified flags aren't set in the packet
+def convert_flags_to_ternary(flags_input, rule=None):
+    flags_values_dict = {
+        'F': 0x01,
+        'S': 0x02,
+        'R': 0x04,
+        'P': 0x08,
+        'A': 0x10,
+        'U': 0x20,
+        '2': 0x40,
+        '1': 0x80,
+    }
+
+    flags = list(''.join(flags_input).replace(' ', ''))
+
+    # If no flag set, allow any value
+    if len(flags) == 0:
+        return (0x00, 0x00)
+
+    # Test for not supported characters
+    supported_flag_values = flags_values_dict.keys()
+    invalid_flags = [invalid_flag for invalid_flag in flags
+                     if invalid_flag not in supported_flag_values]
+
+    if len(invalid_flags) != 0:
+        print("Not supported flags {} found in {} from {} - {}".format(invalid_flags, flags, flags_input, rule))
+        return (0x00, 0x00)
+
+    result_value = 0
+    for flag in flags:
+        flag_value = flags_values_dict[flag]
+        result_value += flag_value
+
+    return (result_value, 0xff)
+
+
+
+
+def set_rule_value(rule, key, vars):
+    header_field = rule.header.get(key)
+    rule.header[key].update(transform_value(header_field, vars))
+
 
 
 def get_option_value(options, name, default):
@@ -150,60 +253,6 @@ def get_option_value(options, name, default):
     if type(result) is not list:
         return [result]
     return result
-
-def transform_value(include, value, vars, is_port):
-    if include:
-        if type(value) is list:
-            result = []
-            for v in value:
-                if type(v) is tuple:
-                    include_new, value_new = v
-                    result.extend(transform_value(include_new, value_new, vars, is_port))
-            return result
-
-        if "$" in value:
-            key_var = value.replace('$', '')
-            new_value = vars.get(key_var, "ERROR")
-            return new_value
-
-        if not is_port and value == "any":
-            return ['0.0.0.0/0']
-
-        if not is_port and type(value) is str:
-            return [value]
-
-        if is_port and value == "any":
-            return [-1]
-
-        if not is_port:
-            return config.parse_ipvar(value)
-
-        return config.parser_port_var(value)
-    else:
-        # TODO
-        return config.parser_port_var(value)
-
-def set_rule_value(rule, key, vars, is_port):
-    include, value = rule.header.get(key)
-    print(include, value)
-    exit()
-    rule.header[key] = transform_value(include, value, vars, is_port)
-
-
-def transform_rules_on_config(rules, config):
-    rules_copy = copy.deepcopy(rules)
-
-    print(config.ip_addresses)
-    for rule in rules_copy:
-        set_rule_value(rule, 'source', config.ip_addresses, False)
-        set_rule_value(rule, 'src_port', config.ports, True)
-        set_rule_value(rule, 'destination', config.ip_addresses, False)
-        set_rule_value(rule, 'dst_port', config.ports, True)
-
-    return rules_copy
-
-
-
 
 
 def transform_rules_on_port_range(rules, config):
@@ -263,44 +312,6 @@ def parsed_rule_to_p4(config, parsed_rule):
     return flat_p4_rules
 
 
-# Not supported
-#     + - ALL flag, match on all specified flags plus any others
-#     * - ANY flag, match on any of the specified flags
-#     ! - NOT flag, match if the specified flags aren't set in the packet
-def convert_flags_to_ternary(flags_input, rule=None):
-    flags_values_dict = {
-        'F': 0x01,
-        'S': 0x02,
-        'R': 0x04,
-        'P': 0x08,
-        'A': 0x10,
-        'U': 0x20,
-        '2': 0x40,
-        '1': 0x80,
-    }
-
-    flags = list(''.join(flags_input).replace(' ', ''))
-
-    # If no flag set, allow any value
-    if len(flags) == 0:
-        return (0x00, 0x00)
-
-    # Test for not supported characters
-    supported_flag_values = flags_values_dict.keys()
-    invalid_flags = [invalid_flag for invalid_flag in flags
-                     if invalid_flag not in supported_flag_values]
-
-    if len(invalid_flags) != 0:
-        print("Not supported flags {} found in {} from {} - {}".format(invalid_flags, flags, flags_input, rule))
-        return (0x00, 0x00)
-
-    result_value = 0
-    for flag in flags:
-        flag_value = flags_values_dict[flag]
-        result_value += flag_value
-
-    return (result_value, 0xff)
-
 
 def to_p4_match_rule(proto, src, src_port_range, dst, dst_port_range, flags):
     proto_mapping = {'icmp': 1, 'ip': 4, 'tcp': 6, 'udp': 17}
@@ -350,45 +361,6 @@ def to_p4_match_dedupped_rules(ids_rules):
 
     return dedup_ids_rules.values()
 
-
-def is_wildcard(rule, max_port=512):
-    flag = None
-    flag_mask = None
-    for key, value in rule.options.values():
-        if key == 'flags':
-            flag, flag_mask = convert_flags_to_ternary(value, rule)
-            break
-
-    wildcard_ip = ['0.0.0.0/0']
-    wildcard_port = [-1]
-    src_port = rule.header.get('src_port')
-    dst_port = rule.header.get('dst_port')
-
-    if (src_port == wildcard_port and
-        dst_port == wildcard_port) and \
-            not flag:
-        return True
-    if (((src_port == wildcard_port and
-          len(dst_port) > max_port)) or
-        ((dst_port == wildcard_port and
-          len(src_port) > max_port))) and \
-            not flag:
-        return True
-    return False
-
-
-def contains_ipv6(rule):
-    src_list = rule.header.get('source')
-    dst_list = rule.header.get('destination')
-
-    for src in src_list:
-        if ':' in src:
-            return True
-    for dst in dst_list:
-        if ':' in dst:
-            return True
-
-    return False
 
 
 
@@ -453,14 +425,8 @@ def reduce_rules_from_deduped(rules):
     return rules_dict.values()
 
 
-def is_sid_excluded(rule, excluded_sids):
-    sid = int(get_option_value(rule.options, 'sid', "0")[0])
-    return sid in excluded_sids
 
 
-def get_rule_priority(parsed_rule):
-    classtype = get_option_value(parsed_rule.options, 'classtype', "unknown")[0]
-    return config.classifications.get(classtype).get('priority')
 
 
 

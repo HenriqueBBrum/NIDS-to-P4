@@ -4,6 +4,7 @@ class RuleStatistics:
 
     def __init__(self, parsed_rules, config):
         self.rules = parsed_rules
+
         self.protocol_stats = self.compute_protocol_stats()
         self.direction_stats = self.compute_direction_stats()
         self.src_stats = self.compute_src_stats()
@@ -24,19 +25,20 @@ class RuleStatistics:
         return Counter(result)
     
     def compute_src_stats(self):
-        result = [str(rule.header.get('source')[1]) for rule in self.rules]
+        print(str(list(self.rules[0].header.get('source').keys())))
+        result = [str(list(rule.header.get('source').keys())) for rule in self.rules]
         return Counter(result)
 
     def compute_dst_stats(self):
-        result = [str(rule.header.get('destination')[1]) for rule in self.rules]
+        result = [str(list(rule.header.get('destination').keys())) for rule in self.rules]
         return Counter(result)
 
     def compute_src_port_stats(self):
-        result = [str(rule.header.get('src_port')[1]) for rule in self.rules]
+        result = [str(list(rule.header.get('src_port').keys())) for rule in self.rules]
         return Counter(result)
 
     def compute_dst_port_stats(self):
-        result = [str(rule.header.get('dst_port')[1]) for rule in self.rules]
+        result = [str(list(rule.header.get('dst_port').keys())) for rule in self.rules]
         return Counter(result)
     
 

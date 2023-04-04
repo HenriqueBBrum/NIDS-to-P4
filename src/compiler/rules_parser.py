@@ -17,12 +17,12 @@ def get_rules(rules_path, ignored_rule_files):
 
     rules = []
     for rule_file in files:
-        rules.extend(parse_rules(rule_file))
+        rules.extend(__parse_rules(rule_file))
       
     return rules
 
 # Parse each rule from a rule file
-def parse_rules(rule_file):
+def __parse_rules(rule_file):
     parsed_rules = []
     with open(rule_file, 'r') as file:
         lines = file.readlines()
