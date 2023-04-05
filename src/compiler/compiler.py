@@ -33,9 +33,6 @@ def main(config_path, rules_path):
   
     # for rule in new_rules:
     #     print(rule.header["src_port"])
-    
-    exit()
-
     print("Converting parsed rules to P4 table entries")
     p4_rules = convert_parsed_rules_to_P4(new_rules, config)
     # # Step 6) Deduplicate rules
@@ -131,70 +128,69 @@ def update_rules_ip_and_ports(rules, config):
 
 
 # Substitute system variables for the real values in the config file and group ports into range
-def _update_rule_ip_and_ports(header_field_dict, config_variables, is_port):
-    var_sub_results = {}
-    grouped_result = {}
-    for value, bool_ in header_field_dict:
-        if "$" in value:
-            start_time = datetime.now()
-            print("keyyyyyy")
+def _update_rule_ip_and_ports(header_field, config_variables, is_port):
+    var_sub_results = []
+    grouped_result = []
+
+    for value, bool_ in header_field:
+        if isinstance(value, str) and "$" in value :
             key_temp = value.replace('$', '')
             variable_values = config_variables.get(key_temp, "ERROR")
             if not bool_:
                 for variable_value, variable_value_bool in variable_values:
                     variable_values[variable_value] =  bool(~(bool_ ^ variable_value_bool)+2)
-
-            var_sub_results.update(variable_values)
-
-            end_time = datetime.now()
-            print('Duration: {}'.format(end_time - start_time))
-
+            
+            var_sub_results.extend(variable_values)
         else:
-            var_sub_results[value] = bool_
-
+            var_sub_results.append((value, bool_))
     
-
-    # if is_port:
-    #     grouped_result = group_ports_into_ranges(var_sub_results)
-    # else:
-    #     grouped_result = var_sub_results
+    if is_port:
+        grouped_result = group_ports_into_ranges(var_sub_results)
+    else:
+        grouped_result = var_sub_results
            
-    return var_sub_results
+    return grouped_result
 
-# Groups ports into ranges
+# Groups ports into ranges. Assumes no intersecting range value and duplicates. Sill simple
 def group_ports_into_ranges(ports):
     count = 0
     initial_port = -1
-    grouped_ports = {}
-    ports_list = list(enumerate(ports.items())) # Creates a list of all ports
-    sorted_port_list = sorted(ports_list, key=lambda x:x[1][0]) # Sorts the list according to the port value (index, (port, bool))
-    for index, item in sorted_port_list:
+    grouped_ports = []
+    if len(ports) == 1:
+        return ports
+
+    sorted_ports = sorted(ports, key=lambda x: (int(x[0].start) if isinstance(x[0], range) else int(x[0])))
+    for index, item in enumerate(sorted_ports):
+        if isinstance(item[0], range):
+            grouped_ports.append(item)
+            continue
+
         if count == 0:
             initial_port = item[0]
             bool_ = item[1]
 
-        if isinstance(initial_port, range):
-            return {initial_port: bool_}
-
         try:
-            next_tuple= sorted_port_list[index+1][1]
+            next_tuple= sorted_ports[index+1] 
+            if isinstance(next_tuple[0], range):
+                next_tuple= (-1, False)
         except Exception as e:
             next_tuple= (-1, False)
-        
+
         if int(item[0]) == int(next_tuple[0]) - 1 and item[1]==next_tuple[1]:
             count+=1
         else:
             if count == 0:
-                grouped_ports[initial_port] = bool_
+                grouped_ports.append((initial_port, bool_))
                 continue
             
-            grouped_ports[range(int(initial_port), int(initial_port)+count)] = bool_
+            grouped_ports.append((range(int(initial_port), int(initial_port)+count), bool_))
             count = 0
             initial_port = -1
+
     return grouped_ports
 
 
-
+# 
 def convert_parsed_rules_to_P4(parsed_rules, config):
     rules = []
     for parsed_rule in parsed_rules:
@@ -205,7 +201,6 @@ def convert_parsed_rules_to_P4(parsed_rules, config):
 
 
 
-
 def parsed_rule_to_P4(parsed_rule, config):
     proto = parsed_rule.header.get('proto')
     src_ip_list = parsed_rule.header.get('source')
@@ -213,30 +208,32 @@ def parsed_rule_to_P4(parsed_rule, config):
     dst_ip_list = parsed_rule.header.get('destination')
     dst_port_list = parsed_rule.header.get('dst_port')
 
-    print(parsed_rule.options)
     flags = []
+    pŕint(parsed_rule.options)
     for key, value in parsed_rule.options.values():
         if key == 'flags':
             flags = value
+            print(parsed_rule.options)
+            exit()
+
             break
 
-    exit()
 
     flat_p4_rules = []
-    for src in src_list:
-        for src_port_range in src_port_range_list:
-            for dst in dst_list:
-                if "." not in dst:
-                    print(parsed_rule.header.values())
-                    exit(-1)
-                for dst_port_range in dst_port_range_list:
-                    sid = get_option_value(parsed_rule.options, 'sid', "0")[0]
-                    rev = get_option_value(parsed_rule.options, 'rev', "0")[0]
-                    classtype = get_option_value(parsed_rule.options, 'classtype', "unknown")[0]
-                    priority = config.classifications.get(classtype).get('priority')
-                    p4_rule_match = to_p4_match_rule(proto, src, src_port_range, dst, dst_port_range, flags)
-                    p4_rule = P4CompiledIDSMatchRule(match=p4_rule_match, priority=priority, sid=sid, rev=rev)
-                    flat_p4_rules.append(p4_rule)
+    # for src in src_list:
+    #     for src_port_range in src_port_range_list:
+    #         for dst in dst_list:
+    #             if "." not in dst:
+    #                 print(parsed_rule.header.values())
+    #                 exit(-1)
+    #             for dst_port_range in dst_port_range_list:
+    #                 sid = get_option_value(parsed_rule.options, 'sid', "0")[0]
+    #                 rev = get_option_value(parsed_rule.options, 'rev', "0")[0]
+    #                 classtype = get_option_value(parsed_rule.options, 'classtype', "unknown")[0]
+    #                 priority = config.classifications.get(classtype).get('priority')
+    #                 p4_rule_match = to_p4_match_rule(proto, src_ip_list, src_port_list, dst, dst_port_range, flags)
+    #                 p4_rule = P4CompiledIDSMatchRule(match=p4_rule_match, priority=priority, sid=sid, rev=rev)
+    #                 flat_p4_rules.append(p4_rule)
     return flat_p4_rules
 
 

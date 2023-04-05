@@ -63,9 +63,10 @@ class SnortConfiguration():
         if re.search(r",|(!?\[.*\])", raw_ips):
             parsed_ips = self.__flatten_list(raw_ips, self.__parse_ip)
         else:
-            parsed_ips.append(self.__parse_ip(raw_ips, True))
+            parsed_ips.extend(self.__parse_ip(raw_ips, True))
 
-        return parsed_ips   
+        return parsed_ips  
+
 
     def __flatten_list(self, _list, individual_parser):
         list_deny = True
@@ -86,10 +87,10 @@ class SnortConfiguration():
                         return_list.append((value, bool(~(bool_ ^ list_deny)+2)))
                 else:
                     for element in _lists.split(","):
-                        return_list.append(individual_parser(element, list_deny))
+                        return_list.extend(individual_parser(element, list_deny))
         else:
             for element in _list.split(","):
-                return_list.append(individual_parser(element, list_deny))
+                return_list.extend(individual_parser(element, list_deny))
 
         return return_list
 
@@ -107,15 +108,16 @@ class SnortConfiguration():
             bool_multiplier = bool(~(local_bool ^ parent_bool)+2)
             for value, bool_ in ips:
                 return_ips.append((value, bool(~(bool_ ^ bool_multiplier)+2)))  #xnor because !! = true
+
             return return_ips
         
-        return (raw_ip, bool(~(local_bool ^ parent_bool)+2)) 
+        return [(raw_ip, bool(~(local_bool ^ parent_bool)+2))]
 
 
 
     def __parse_ports(self, raw_ports):
         if raw_ports == "any":
-            return [(range(self.MIN_PORT, self.MAX_PORT), True)]
+            return [(range(self.MIN_PORT, self.MAX_PORT+1), True)]
         elif raw_ports == "!any":
             raise Exception("Invalid ports")
         
@@ -123,7 +125,7 @@ class SnortConfiguration():
         if re.search(r",|(!?\[.*\])", raw_ports):
             parsed_ports = self.__flatten_list(raw_ports, self.__parse_port)
         else:
-             parsed_ports.append(self.__parse_port(raw_ports, True))
+             parsed_ports.extend(self.__parse_port(raw_ports, True))
 
         return parsed_ports   
 
@@ -149,15 +151,15 @@ class SnortConfiguration():
                 raise ValueError("Wrong range values")
             
             if range_[1] == "":
-                return(range(int(range_[0]), self.MAX_PORT), bool(~(local_bool ^ parent_bool)+2))
+                return [(range(int(range_[0]), self.MAX_PORT+1), bool(~(local_bool ^ parent_bool)+2))]
             elif range_[0] == "":
-                return(range(self.MIN_PORT, int(range_[1])), bool(~(local_bool ^ parent_bool)+2))
+                return [(range(self.MIN_PORT, int(range_[1])+1), bool(~(local_bool ^ parent_bool)+2))]
             
             lower_bound = int(range_[0]) if int(range_[0]) > self.MIN_PORT else self.MIN_PORT
             upper_bound = int(range_[1]) if int(range_[1]) > self.MIN_PORT else self.MIN_PORT
-            return (range(lower_bound, upper_bound), bool(~(local_bool ^ parent_bool)+2))
+            return [(range(lower_bound, upper_bound+1), bool(~(local_bool ^ parent_bool)+2))]
         
-        return (raw_port, bool(~(local_bool ^ parent_bool)+2))
+        return [(raw_port, bool(~(local_bool ^ parent_bool)+2))]
 
 
 

@@ -237,7 +237,7 @@ class Parser(object):
         parsed_ports = []
         if isinstance(port, str):
             if port == "any":
-                return [(range(self.MIN_PORT, self.MAX_PORT), True)]
+                return [(range(self.MIN_PORT, self.MAX_PORT+1), True)]
             elif port == "!any":
                 raise Exception("Invalid ports %s" % port)
             
@@ -263,13 +263,13 @@ class Parser(object):
                 raise ValueError("Wrong range values")
             
             if range_[1] == "":
-                return(range(int(range_[0]), self.MAX_PORT), bool(~(local_bool ^ parent_bool)+2))
+                return(range(int(range_[0]), self.MAX_PORT+1), bool(~(local_bool ^ parent_bool)+2))
             elif range_[0] == "":
-                return(range(self.MIN_PORT, int(range_[1])), bool(~(local_bool ^ parent_bool)+2))
+                return(range(self.MIN_PORT, int(range_[1])+1), bool(~(local_bool ^ parent_bool)+2))
             
             lower_bound = int(range_[0]) if int(range_[0]) > self.MIN_PORT else self.MIN_PORT
             upper_bound = int(range_[1]) if int(range_[1]) > self.MIN_PORT else self.MIN_PORT
-            return (range(lower_bound, upper_bound), bool(~(local_bool ^ parent_bool)+2))
+            return (range(lower_bound, upper_bound+1), bool(~(local_bool ^ parent_bool)+2))
         
         return (port, bool(~(local_bool ^ parent_bool)+2))
     
