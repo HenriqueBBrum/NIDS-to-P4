@@ -155,17 +155,17 @@ class Parser(object):
 
 
     def __ip(self, ip):
-        parsed_ips = {}
+        parsed_ips = []
         if isinstance(ip, str):
             if ip == "any":
-                return {"0.0.0.0/0": True}
+                return [("0.0.0.0/0", True)]
             elif ip == "!any":
-                raise Exception("Invalid IP %s" % raw_ips)
+                raise Exception("Invalid IP %s" % ip)
             
             if re.search(r",|(!?\[.*\])", ip):
                 parsed_ips = self.__flatten_list(ip, self.__parse_ip)
             else:
-                parsed_ips = self.__parse_ip(ip, True)
+                parsed_ips.append(self.__parse_ip(ip, True))
                 
             if not self.__validate_ip(parsed_ips):
                 raise ValueError("Unvalid ip or variable: %s" % ip)
@@ -180,31 +180,31 @@ class Parser(object):
         _list = re.sub(r'^\[|\]$', '', _list)
         _list = re.sub(r'"', '', _list)
 
-        return_list = {}
+        return_list = []
         if re.search(r"(\[.*\])", _list): # If there is(are) a sub-list(s) process it(them)
             nested_lists = re.split(r",(!?\[.*\])", _list)
             nested_lists = filter(None, nested_lists)
             for _lists in nested_lists: 
                 if re.match(r"^\[|^!\[", _lists): # If there are more sub-lists in lower levels process them # match is just the first one 
                     flattened_lists = self.__flatten_list(_lists, self.__parse_ip)
-                    for key, value in flattened_lists.items():
-                        return_list[key] = bool(~(value ^ list_deny)+2)
+                    for value, bool_ in flattened_lists:
+                        return_list.append((value, bool(~(bool_ ^ list_deny)+2)))
                 else:
                     for element in _lists.split(","):
-                        return_list.update(individual_parser(element, list_deny))
+                        return_list.append(individual_parser(element, list_deny))
         else:
             for element in _list.split(","):
-                return_list.update(individual_parser(element, list_deny))
+                return_list.append(individual_parser(element, list_deny))
 
         return return_list
      
-    def __parse_ip(self, ip, parent_bool) -> Dict:
+    def __parse_ip(self, ip, parent_bool):
         local_bool = True
         if ip.startswith("!"):
             ip = ip[1:]
             local_bool = False
         
-        return {ip: bool(~(local_bool ^ parent_bool)+2)}
+        return (ip, bool(~(local_bool ^ parent_bool)+2))
         
     # Validate if the IP is either a OS variable (e.g. $HOME_NET) or a valid IPv4 or IPv6 address
     def __validate_ip(self, ips):
@@ -222,8 +222,8 @@ class Parser(object):
             "HOME_NET",
             "any"
         }
-
-        for ip, bool_ in ips.items():
+        
+        for ip, bool_ in ips:
             if isinstance(ip, str):
                 if ip not in variables:
                     if "/" in ip:
@@ -234,17 +234,17 @@ class Parser(object):
     
 
     def __port(self, port):
-        parsed_ports = {}
+        parsed_ports = []
         if isinstance(port, str):
             if port == "any":
-                return {range(self.MIN_PORT, self.MAX_PORT): True}
+                return [(range(self.MIN_PORT, self.MAX_PORT), True)]
             elif port == "!any":
                 raise Exception("Invalid ports %s" % port)
             
             if re.search(r",|(!?\[.*\])", port):
                 parsed_ports = self.__flatten_list(port, self.__parse_port)
             else:
-                parsed_ports = self.__parse_port(port, True)
+                parsed_ports.append(self.__parse_port(port, True))
                 
             if not self.__validate_port(parsed_ports):
                 raise ValueError("Unvalid port or variable: %s" % port)
@@ -263,25 +263,25 @@ class Parser(object):
                 raise ValueError("Wrong range values")
             
             if range_[1] == "":
-                return{str(k): bool(~(local_bool ^ parent_bool)+2) for k in range(int(range_[0]), self.MAX_PORT)}
+                return(range(int(range_[0]), self.MAX_PORT), bool(~(local_bool ^ parent_bool)+2))
             elif range_[0] == "":
-                return{str(k): bool(~(local_bool ^ parent_bool)+2) for k in range(self.MIN_PORT, int(range_[1]))}
+                return(range(self.MIN_PORT, int(range_[1])), bool(~(local_bool ^ parent_bool)+2))
             
             lower_bound = int(range_[0]) if int(range_[0]) > self.MIN_PORT else self.MIN_PORT
             upper_bound = int(range_[1]) if int(range_[1]) > self.MIN_PORT else self.MIN_PORT
-            return {str(k): bool(~(local_bool ^ parent_bool)+2) for k in range(lower_bound, upper_bound)}
+            return (range(lower_bound, upper_bound), bool(~(local_bool ^ parent_bool)+2))
         
-        return {port: bool(~(local_bool ^ parent_bool)+2)}
+        return (port, bool(~(local_bool ^ parent_bool)+2))
     
                 
     def __validate_port(self, ports):
         variables = {"any", "$HTTP_PORTS"}
 
-        for key, value in ports.items():
-            if isinstance(key, str):
-                if key not in variables and not re.match(r"^\$+", key):
-                    if re.search(":", key):
-                        range_ = key.split(":")
+        for port, bool_ in ports:
+            if isinstance(port, str):
+                if port not in variables and not re.match(r"^\$+", port):
+                    if re.search(":", port):
+                        range_ = port.split(":")
                         if len(range_) != 2 or "!" in range_[1] :
                             raise ValueError("Wrong range values")
                         
@@ -298,10 +298,10 @@ class Parser(object):
                             
                         if(not open_range):
                             if(int(range_[0]) > int(range_[-1])):
-                                raise ValueError("Port range is malformed %s" % key)
+                                raise ValueError("Port range is malformed %s" % port)
                             
-                    elif int(key) < 0 or int(key) > 65535:
-                        raise ValueError("Port is out of range %s" % key)
+                    elif int(port) < 0 or int(port) > 65535:
+                        raise ValueError("Port is out of range %s" % port)
         return True
               
 

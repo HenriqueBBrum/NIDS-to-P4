@@ -55,14 +55,15 @@ class SnortConfiguration():
     ### TODO validate input line
     def __parse_ips(self, raw_ips):
         if raw_ips == "any":
-            return {"0.0.0.0/0": True}
+            return [("0.0.0.0/0", True)]
         elif raw_ips == "!any":
             raise Exception("Invalid IP %s" % raw_ips)
         
+        parsed_ips = []
         if re.search(r",|(!?\[.*\])", raw_ips):
             parsed_ips = self.__flatten_list(raw_ips, self.__parse_ip)
         else:
-            parsed_ips = self.__parse_ip(raw_ips, True)
+            parsed_ips.append(self.__parse_ip(raw_ips, True))
 
         return parsed_ips   
 
@@ -74,21 +75,21 @@ class SnortConfiguration():
         _list = re.sub(r'^\[|\]$', '', _list)
         _list = re.sub(r'"', '', _list)
     
-        return_list = {}
+        return_list = []
         if re.search(r"(\[.*\])", _list): # If there is(are) a sub-list(s) process it(them)
             nested_lists = re.split(r",(!?\[.*\])", _list)
             nested_lists = filter(None, nested_lists)
             for _lists in nested_lists: 
                 if re.match(r"^\[|^!\[", _lists): # If there are more sub-lists in lower levels process them # match is just the first one 
                     flattened_lists = self.__flatten_list(_lists, self.__parse_ip)
-                    for key, value in flattened_lists.items():
-                        return_list[key] = bool(~(value ^ list_deny)+2)
+                    for value, bool_ in flattened_lists:
+                        return_list.append((value, bool(~(bool_ ^ list_deny)+2)))
                 else:
                     for element in _lists.split(","):
-                        return_list.update(individual_parser(element, list_deny))
+                        return_list.append(individual_parser(element, list_deny))
         else:
             for element in _list.split(","):
-                return_list.update(individual_parser(element, list_deny))
+                return_list.append(individual_parser(element, list_deny))
 
         return return_list
 
@@ -99,28 +100,30 @@ class SnortConfiguration():
         if raw_ip.startswith("!"):
             raw_ip = raw_ip[1:]
             local_bool = False
+
         if re.match(r'^!?\$', raw_ip):
             ips = self.ip_addresses[re.sub(r'^!?\$', '', raw_ip)]
-            return_ips = {}
+            return_ips = []
             bool_multiplier = bool(~(local_bool ^ parent_bool)+2)
-            for key, value in ips.items():
-                return_ips[key] = bool(~(bool_multiplier ^ value)+2)  #xnor because !! = true
+            for value, bool_ in ips:
+                return_ips.append((value, bool(~(bool_ ^ bool_multiplier)+2)))  #xnor because !! = true
             return return_ips
         
-        return {raw_ip: bool(~(local_bool ^ parent_bool)+2)}
+        return (raw_ip, bool(~(local_bool ^ parent_bool)+2)) 
 
 
 
     def __parse_ports(self, raw_ports):
         if raw_ports == "any":
-            return {range(self.MIN_PORT, self.MAX_PORT): True}
+            return [(range(self.MIN_PORT, self.MAX_PORT), True)]
         elif raw_ports == "!any":
             raise Exception("Invalid ports")
         
+        parsed_ports = []
         if re.search(r",|(!?\[.*\])", raw_ports):
             parsed_ports = self.__flatten_list(raw_ports, self.__parse_port)
         else:
-            parsed_ports = self.__parse_port(raw_ports, True)
+             parsed_ports.append(self.__parse_port(raw_ports, True))
 
         return parsed_ports   
 
@@ -135,10 +138,10 @@ class SnortConfiguration():
 
         if re.match(r'^!?\$', raw_port):
             ports = self.ports[re.sub(r'^!?\$', '', raw_port)]
-            return_ports = {}
+            return_ports = []
             bool_multiplier = bool(~(local_bool ^ parent_bool)+2)
-            for key, value in ports.items():
-                return_ports[key] = bool(~(bool_multiplier ^ value)+2)  #xnor because !! = true
+            for value, bool_ in ports:
+                return_ports.append((value, bool(~(bool_ ^ bool_multiplier)+2)))  #xnor because !! = true
             return return_ports
         elif re.match(r'^(!?[0-9]+:|:[0-9]+)', raw_port):
             range_ = raw_port.split(":")
@@ -146,15 +149,15 @@ class SnortConfiguration():
                 raise ValueError("Wrong range values")
             
             if range_[1] == "":
-                return{str(k): bool(~(local_bool ^ parent_bool)+2) for k in range(int(range_[0]), self.MAX_PORT)}
+                return(range(int(range_[0]), self.MAX_PORT), bool(~(local_bool ^ parent_bool)+2))
             elif range_[0] == "":
-                return{str(k): bool(~(local_bool ^ parent_bool)+2) for k in range(self.MIN_PORT, int(range_[1]))}
+                return(range(self.MIN_PORT, int(range_[1])), bool(~(local_bool ^ parent_bool)+2))
             
             lower_bound = int(range_[0]) if int(range_[0]) > self.MIN_PORT else self.MIN_PORT
             upper_bound = int(range_[1]) if int(range_[1]) > self.MIN_PORT else self.MIN_PORT
-            return {str(k): bool(~(local_bool ^ parent_bool)+2) for k in range(lower_bound, upper_bound)}
-         
-        return {raw_port: bool(~(local_bool ^ parent_bool)+2)}
+            return (range(lower_bound, upper_bound), bool(~(local_bool ^ parent_bool)+2))
+        
+        return (raw_port, bool(~(local_bool ^ parent_bool)+2))
 
 
 
