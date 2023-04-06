@@ -5,9 +5,9 @@ import shlex
 from typing import Tuple, List, Dict, Any
 
 try:
-    from .option_validation_dicts import Dicts
+    from .validation_dicts import Dicts
 except ImportError:
-    from compiler.snort_rule_parser.option_validation_dicts import Dicts
+    from compiler.snort_rule_parser.validation_dicts import Dicts
 
 
 ### Class representing a rule.
@@ -208,24 +208,9 @@ class Parser(object):
         
     # Validate if the IP is either a OS variable (e.g. $HOME_NET) or a valid IPv4 or IPv6 address
     def __validate_ip(self, ips):
-        variables = {
-            "$EXTERNAL_NET",
-            "$HTTP_SERVERS",
-            "$INTERNAL_NET",
-            "$SQL_SERVERS",
-            "$SMTP_SERVERS",
-            "$DNS_SERVERS",
-            "$TELNET_SERVERS",
-            "$AIM_SERVERS",
-            "$SIP_SERVERS",
-            "$HOME_NET",
-            "HOME_NET",
-            "any"
-        }
-        
         for ip, bool_ in ips:
             if isinstance(ip, str):
-                if ip not in variables:
+                if not self.dicts.ip_variables(ip):
                     if "/" in ip:
                         ipaddress.ip_network(ip, False)
                     else:
@@ -275,11 +260,9 @@ class Parser(object):
     
                 
     def __validate_port(self, ports):
-        variables = {"any", "$HTTP_PORTS"}
-
         for port, bool_ in ports:
             if isinstance(port, str):
-                if port not in variables and not re.match(r"^\$+", port):
+                if not self.dicts.port_variables(port) and not re.match(r"^\$+", port):
                     if re.search(":", port):
                         range_ = port.split(":")
                         if len(range_) != 2 or "!" in range_[1] :
@@ -290,7 +273,7 @@ class Parser(object):
                             if not element:
                                 open_range = True
                                 continue
-                            if element in variables or re.search(r"^\$+", element):
+                            if self.dicts.port_variables(element) or re.search(r"^\$+", element):
                                 continue
                             
                             if int(element) < 0 or int(element) > 65535:
@@ -326,9 +309,18 @@ class Parser(object):
                 if ':' in option_string:
                     key, value = option_string.split(":", 1)
                     value = shlex.split(value, ",")
-                    options_dict[key] = {"value": value, "index": index}
+
+                    if self.dicts.payload_detection(key) and key in options_dict:
+                        options_dict[key].append((str(index), value))
+                        continue
+
+                    options_dict[key] = [(str(index), value)]
                 else:
-                    options_dict[option_string] = {"value": "", "index": index}
+                    if self.dicts.payload_detection(option_string) and option_string in options_dict:
+                        options_dict[option_string].append((str(index), ""))
+                        continue
+
+                    options_dict[option_string] = [(str(index), "")]
 
             self.__validate_options(options_dict)
             return options_dict
@@ -358,24 +350,23 @@ class Parser(object):
     # Verifies if the option key is valid or if the classtype option has a valid value
     def __validate_options(self, options):
         for key, data in options.items():
-            value = data["value"]
-            
-            if len(value) == 1:
-                content_mod = self.dicts.content_modifiers(value[0])
-                opt = False
-                if content_mod:
-                    # An unfinished feature
-                    continue
+            for index, value in data:                
+                # if len(value) == 1:
+                #     content_mod = self.dicts.content_modifiers(value[0])
+                #     opt = False
+                #     if content_mod:
+                #         # An unfinished feature
+                #         continue
 
-            valid_option = self.dicts.verify_option(key)
-            if not valid_option:
-                raise ValueError("Unrecognized option: %s" % key)
-            
-            if key=="classtype":
-                if len(value)>1:
-                    raise Exception("Multiple rule classification %s" % value)
-                classification = self.dicts.classtypes(value[0])
-                if not classification:
-                    raise ValueError("Unrecognized rule classification: %s" % value)
+                valid_option = self.dicts.verify_option(key)
+                if not valid_option:
+                    raise ValueError("Unrecognized option: %s" % key)
+                
+                if key=="classtype":
+                    if len(value)>1:
+                        raise Exception("Multiple rule classification %s" % value)
+                    classification = self.dicts.classtypes(value[0])
+                    if not classification:
+                        raise ValueError("Unrecognized rule classification: %s" % value)
 
         return options

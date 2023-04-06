@@ -1,29 +1,37 @@
 ### Main file that compiles a Snort rule file according to the snort.conf and classification.conf to P4 table entries
+# Args: config path, rules_path
+#       - config_path: path to the configuration files
+#       - rules_path: path to a single rule file or to a directory containing multiple rule files
+
 
 ## Standart and 3rd-party imports
 import sys
 import copy
 import gc
 from datetime import datetime
+from binascii import hexlify
+from socket import inet_aton
+from ipaddress import ip_network
+
 
 ## Local imports
 from snort_config_parser import SnortConfiguration
 from rules_parser import get_rules, rules_to_sid_rev_map
 from rule_statistics import RuleStatistics
+from P4_related_classes import *
+
 # from utils import convert_ip_network_to_hex
-# from models import *
 # from port_mask import mask_range
 
-# Args: config path, rules_path
-#       - config_path: path to the configuration files
-#       - rules_path: path to a single rule file or to a directory containing multiple rule files
+
+
+PROTO_MAPPING = {'icmp': 1, 'ip': 4, 'tcp': 6, 'udp': 17}
 
 def main(config_path, rules_path):
     config = SnortConfiguration(snort_version=2, configuration_dir=config_path)
     ignored_rule_files = []
     print("Getting and parsing rules.....")
     rules = get_rules(rules_path, ignored_rule_files) # Get all rules from multiple files or just one
-
     # stats = RuleStatistics(rules, config)
     # stats.print_all()
     # rules_sid_rev_map = rules_to_sid_rev_map(rules)
@@ -31,8 +39,7 @@ def main(config_path, rules_path):
     print("Adjusting rules. Replacing variables and grouping ports into ranges.....")
     new_rules = update_rules_ip_and_ports(rules, config)
   
-    # for rule in new_rules:
-    #     print(rule.header["src_port"])
+    
     print("Converting parsed rules to P4 table entries")
     p4_rules = convert_parsed_rules_to_P4(new_rules, config)
     # # Step 6) Deduplicate rules
@@ -130,7 +137,6 @@ def update_rules_ip_and_ports(rules, config):
 # Substitute system variables for the real values in the config file and group ports into range
 def _update_rule_ip_and_ports(header_field, config_variables, is_port):
     var_sub_results = []
-    grouped_result = []
 
     for value, bool_ in header_field:
         if isinstance(value, str) and "$" in value :
@@ -145,12 +151,10 @@ def _update_rule_ip_and_ports(header_field, config_variables, is_port):
             var_sub_results.append((value, bool_))
     
     if is_port:
-        grouped_result = group_ports_into_ranges(var_sub_results)
+        return group_ports_into_ranges(var_sub_results)
     else:
-        grouped_result = var_sub_results
+        return var_sub_results
            
-    return grouped_result
-
 # Groups ports into ranges. Assumes no intersecting range value and duplicates. Sill simple
 def group_ports_into_ranges(ports):
     count = 0
@@ -186,66 +190,56 @@ def group_ports_into_ranges(ports):
             grouped_ports.append((range(int(initial_port), int(initial_port)+count), bool_))
             count = 0
             initial_port = -1
-
     return grouped_ports
 
 
-# 
+# Flattens snort rules to multiple p4 table entries
 def convert_parsed_rules_to_P4(parsed_rules, config):
     rules = []
     for parsed_rule in parsed_rules:
-        P4_rules = parsed_rule_to_P4(parsed_rule, config)
+        P4_rules = rule_to_P4(parsed_rule, config)
         rules.extend(P4_rules)
 
     return rules
 
 
-
-def parsed_rule_to_P4(parsed_rule, config):
+def rule_to_P4(parsed_rule, config):
     proto = parsed_rule.header.get('proto')
     src_ip_list = parsed_rule.header.get('source')
     src_port_list = parsed_rule.header.get('src_port')
     dst_ip_list = parsed_rule.header.get('destination')
     dst_port_list = parsed_rule.header.get('dst_port')
 
+    if proto not in PROTO_MAPPING:
+        print("No mapping for proto {}".format(proto))
+        return []
+    
     flags = []
-    pŕint(parsed_rule.options)
-    for key, value in parsed_rule.options.values():
-        if key == 'flags':
-            flags = value
-            print(parsed_rule.options)
-            exit()
-
-            break
-
+    #print(parsed_rule.options.keys())
+    
+    if "flags" in parsed_rule.options:
+        flags = parsed_rule.options["flags"][0]
+        print(flags)
 
     flat_p4_rules = []
-    # for src in src_list:
-    #     for src_port_range in src_port_range_list:
-    #         for dst in dst_list:
-    #             if "." not in dst:
-    #                 print(parsed_rule.header.values())
-    #                 exit(-1)
-    #             for dst_port_range in dst_port_range_list:
-    #                 sid = get_option_value(parsed_rule.options, 'sid', "0")[0]
-    #                 rev = get_option_value(parsed_rule.options, 'rev', "0")[0]
-    #                 classtype = get_option_value(parsed_rule.options, 'classtype', "unknown")[0]
-    #                 priority = config.classifications.get(classtype).get('priority')
-    #                 p4_rule_match = to_p4_match_rule(proto, src_ip_list, src_port_list, dst, dst_port_range, flags)
-    #                 p4_rule = P4CompiledIDSMatchRule(match=p4_rule_match, priority=priority, sid=sid, rev=rev)
-    #                 flat_p4_rules.append(p4_rule)
+    for src_ips in src_ip_list:
+        for src_ports in src_port_list:
+            for dst_ips in dst_ip_list:
+                for dst_ports in dst_port_list:
+                    # sid = get_option_value(parsed_rule.options, 'sid', "0")[0]
+                    # rev = get_option_value(parsed_rule.options, 'rev', "0")[0]
+                    # classtype = get_option_value(parsed_rule.options, 'classtype', "unknown")[0]
+                    # priority = config.classifications.get(classtype).get('priority')
+                    P4_rule_match = rule_to_P4_table_entry(proto, src_ips, src_ports, dst_ips, dst_ports, flags)
+                    P4_rule = P4CompiledIDSMatchRule(match=P4_rule_match, priority=priority, sid=sid, rev=rev)
+                    flat_p4_rules.append(P4_rule)
+
     return flat_p4_rules
 
 
 
-def to_p4_match_rule(proto, src, src_port_range, dst, dst_port_range, flags):
-    proto_mapping = {'icmp': 1, 'ip': 4, 'tcp': 6, 'udp': 17}
-    # Convert
-    if proto not in proto_mapping:
-        print("No mapping for proto {}".format(proto))
-        exit(-1)
-
-    src_network, src_address, src_mask = convert_ip_network_to_hex(src)
+def rule_to_P4_table_entry(proto, src, src_port_range, dst, dst_port_range, flags):
+    src_network, src_address, src_mask = convert_ip_network_to_hex(src[0])
     dst_network, dst_address, dst_mask = convert_ip_network_to_hex(dst)
     src_port_start, src_port_end = src_port_range
     dst_port_start, dst_port_end = dst_port_range
@@ -253,7 +247,7 @@ def to_p4_match_rule(proto, src, src_port_range, dst, dst_port_range, flags):
     flags, flags_mask = convert_flags_to_ternary(flags)
 
     p4_match_rule = P4CompiledMatchRule()
-    p4_match_rule.proto = proto_mapping.get(proto, None)
+    p4_match_rule.proto = PROTO_MAPPING.get(proto, None)
 
     p4_match_rule.src_network = src_network
     p4_match_rule.src_addr = src_address
@@ -265,6 +259,7 @@ def to_p4_match_rule(proto, src, src_port_range, dst, dst_port_range, flags):
 
     p4_match_rule.src_port_start = src_port_start
     p4_match_rule.src_port_end = src_port_end
+
     p4_match_rule.dst_port_start = dst_port_start
     p4_match_rule.dst_port_end = dst_port_end
 
@@ -272,6 +267,24 @@ def to_p4_match_rule(proto, src, src_port_range, dst, dst_port_range, flags):
     p4_match_rule.flags_mask = flags_mask
 
     return p4_match_rule
+
+def convert_ip_network_to_hex(ip):
+    if "/" not in ip:
+        ip += "/32"
+
+
+    network = ip_network(ip.replace('[', '').replace(']', ''), False)
+
+    print(ip, network)
+    exit(0)
+    try:
+        ip = hexlify(inet_aton(str(network.network_address))).upper()
+        mask = hexlify(inet_aton(str(network.netmask))).upper()
+        return (network, ip, mask)
+    except Exception as e:
+        print("Error on ip network {}: {}".format(ip_network, e))
+
+    return convert_ip_network_to_hex('255.255.255.255')
 
 # Not supported
 #     + - ALL flag, match on all specified flags plus any others
@@ -310,19 +323,6 @@ def convert_flags_to_ternary(flags_input, rule=None):
         result_value += flag_value
 
     return (result_value, 0xff)
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

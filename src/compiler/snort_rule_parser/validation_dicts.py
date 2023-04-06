@@ -8,6 +8,40 @@ from typing import Any
 
 class Dicts():
     @staticmethod
+    def ip_variables(ip_variable: str = None):
+        ip_variables_set= {
+            "$EXTERNAL_NET",
+            "$HTTP_SERVERS",
+            "$INTERNAL_NET",
+            "$SQL_SERVERS",
+            "$SMTP_SERVERS",
+            "$DNS_SERVERS",
+            "$TELNET_SERVERS",
+            "$AIM_SERVERS",
+            "$SIP_SERVERS",
+            "$HOME_NET",
+            "HOME_NET",
+            "any"
+        }
+
+        if ip_variable in ip_variables_set:
+            return True
+        return False
+        
+    
+    @staticmethod
+    def port_variables(port_variable: str = None):
+        port_variables_set= {
+           "any", 
+           "$HTTP_PORTS"
+        }
+
+        if port_variable in port_variables_set:
+            return True
+        return False
+
+
+    @staticmethod
     def classtypes(cltype: str = None):
         classtypes = {
                 "attempted-admin": "Attempted Administrator Privilege Gain",
