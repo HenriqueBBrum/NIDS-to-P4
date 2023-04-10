@@ -6,43 +6,40 @@ import attr
 class P4CompiledMatchRule(object):
     proto = attr.ib(default=0, order=False)
 
-    src_network = attr.ib(default=str(), order=False)
+    header_value_bool = attr.ib(default={"src_addr": True, "src_port": True, "dst_addr": True, "dst_port": True}, order=False)
+
     src_addr = attr.ib(default=str(), order=False)
     src_addr_mask = attr.ib(default=str(), order=False)
+    src_port = attr.ib(default=str(), order=False)
 
-    src_port_start = attr.ib(default=str(), order=False)
-    src_port_end = attr.ib(default=str(), order=False)
 
-    dst_network = attr.ib(default=str(), order=False)
     dst_addr = attr.ib(default=str(), order=False)
     dst_addr_mask = attr.ib(default=str(), order=False)
-
-    dst_port_start = attr.ib(default=str(), order=False)
-    dst_port_end = attr.ib(default=str(), order=False)
+    dst_port = attr.ib(default=str(), order=False)
 
     flags = attr.ib(default=0xff, order=False)
     flags_mask = attr.ib(default=0xff, order=False)
 
-    def to_match_string(self,):
-        src_port_start = self.src_port_start
-        src_port_end = self.src_port_end
-        dst_port_start = self.dst_port_start
-        dst_port_end = self.dst_port_end
-        if src_port_start == -1:
-            src_port_start = 0x0
-        if src_port_end == -1:
-            src_port_end = 0xffff
-        if dst_port_start == -1:
-            dst_port_start = 0x0
-        if dst_port_end == -1:
-            dst_port_end = 0xffff
+    def to_string(self):
+        src_port_string = self.__port_to_P4_match(self.src_port)
+        dst_port_string = self.__port_to_P4_match(self.dst_port)
 
         return f'{hex(self.proto)} ' + \
                f'0x{self.src_addr.decode("utf-8")}&&&0x{self.src_addr_mask.decode("utf-8")} ' + \
-               f'{src_port_start}->{src_port_end} ' + \
+               src_port_string + \
                f'0x{self.dst_addr.decode("utf-8")}&&&0x{self.dst_addr_mask.decode("utf-8")} ' + \
-               f'{dst_port_start}->{dst_port_end} ' + \
+               dst_port_string + \
                f'{hex(self.flags)}&&&{hex(self.flags_mask)}'
+
+    @staticmethod
+    def __port_to_P4_match(port):
+        port_to_string = ""
+        if(isinstance(port, range)):
+            port_to_string = f'{port.start}->{port.stop}'
+        else:
+            port_to_string = f'{port} '
+
+        return port_to_string
 
 @attr.s
 class P4CompiledIDSMatchRule(object):
@@ -51,27 +48,15 @@ class P4CompiledIDSMatchRule(object):
     sid = attr.ib(default=[], order=False)
     rev = attr.ib(default=[], order=False)
 
-    def to_sid_rev_string(self):
+    def sid_rev_string(self):
         return f'{self.sid}/{self.rev}'
 
-@attr.s
-class P4CompiledRule(object):
-    table = attr.ib(default=str(), order=False)
-    match = attr.ib(default=P4CompiledMatchRule(), order=False)
-    action = attr.ib(default=str(), order=False)
-    params = attr.ib(default=[], order=False)
-    priority = attr.ib(default=str(), order=False)
-
-    def to_rule_string(self):
-        params = self.params if self.params and type(self.params) == list else []
-        parsed_params = " ".join(params)
-        return f'table_add {self.table} {self.action} {self.match.to_match_string()} => {parsed_params} {self.priority}'
 
 @attr.s
 class P4MatchAggregatedRule(object):
     match = attr.ib(default=P4CompiledMatchRule(), order=False)
     priority_list = attr.ib(default=[], order=False)
-    sid_list = attr.ib(default=[], order=False)
+    sid_rev_list = attr.ib(default=[], order=False)
 
     def rules_count(self):
         return len(self.priority_list)
@@ -89,6 +74,20 @@ class P4MatchAggregatedRule(object):
         return {'match': self.match.to_match_string(),
                 'priority_list': self.priority_list,
                 'sid_list': self.sid_list}
+    
+
+@attr.s
+class P4CompiledRule(object):
+    table = attr.ib(default=str(), order=False)
+    match = attr.ib(default=P4CompiledMatchRule(), order=False)
+    action = attr.ib(default=str(), order=False)
+    params = attr.ib(default=[], order=False)
+    priority = attr.ib(default=str(), order=False)
+
+    def to_rule_string(self):
+        params = self.params if self.params and type(self.params) == list else []
+        parsed_params = " ".join(params)
+        return f'table_add {self.table} {self.action} {self.match.to_match_string()} => {parsed_params} {self.priority}'
 
 # @attr.s
 # class P4Rule(object):
