@@ -83,43 +83,24 @@ class Parser(object):
                   'has been closed properly %s ' % rule
             raise SyntaxError(msg)
     
-    # Receives a string "action proto src_ip src_port direction dst_ip dst_port", parses and validates each field, and returns a dictionary
+    # Receives a list "[<action>, <proto>, <src_ip>, <src_port>, <direction>, <dst_ip>, <dst_port>", parses and validates each field
+    # Returns a dictionary
     def __header_list_to_dict(self, header):
         header_dict = collections.OrderedDict()
-        for item in header:
-            if "action" not in header_dict:
-                header_dict["action"] = self.__actions(item)
-                continue
+        
+        header_dict["action"] = self.__action(header[0])
+        header_dict["proto"] = self.__proto(header[1])
+        header_dict["source"] = self.__ip(header[2])
+        header_dict["src_port"] = self.__port(header[3])
+        header_dict["direction"] = self.__direction(header[4])
+        header_dict["destination"] = self.__ip(header[5])
+        header_dict["dst_port"] = self.__port(header[6])
 
-            if "proto" not in header_dict:
-                header_dict["proto"] = self.__proto(item)
-                continue
-               
-            if "source" not in header_dict:
-                header_dict["source"] = self.__ip(item)
-                continue
-                
-                
-            if "src_port" not in header_dict:
-                header_dict["src_port"] = self.__port(item)
-                continue
-
-            if "direction" not in header_dict:
-                header_dict["direction"] = self.__direction(item)
-                continue
-
-            if "destination" not in header_dict:
-                header_dict["destination"] = self.__ip(item)
-                continue
-
-            if "dst_port" not in header_dict:
-                header_dict["dst_port"] = self.__port(item)
-                continue
         return header_dict
 
-
+    # Validates actions
     @staticmethod
-    def __actions(action: str) -> str:
+    def __action(action: str) -> str:
         actions = {
             "alert",
             "log",
@@ -137,7 +118,7 @@ class Parser(object):
             msg = "Invalid action specified %s" % action
             raise ValueError(msg)
 
-
+    # Validates protocols
     @staticmethod
     def __proto(proto: str) -> str:
         protos = {
@@ -153,7 +134,9 @@ class Parser(object):
             msg = "Unsupported Protocol %s " % proto
             raise ValueError(msg)
 
-
+    # Parses one IP or a list of IPs. 
+    # Each input IP turns to the following output (<value>, <bool>) 
+    # <value> is the actual IP and <bool> indicates if the actual value or the negatated value should be used
     def __ip(self, ip):
         parsed_ips = []
         if isinstance(ip, str):
@@ -172,6 +155,7 @@ class Parser(object):
             
         return parsed_ips   
 
+    # Removes all sub-lists and parses the individual elements
     def __flatten_list(self, _list, individual_parser):
         list_deny = True
         if _list.startswith("!"):
@@ -197,7 +181,8 @@ class Parser(object):
                 return_list.append(individual_parser(element, list_deny))
 
         return return_list
-     
+    
+    # Parses an individual IP
     def __parse_ip(self, ip, parent_bool):
         local_bool = True
         if ip.startswith("!"):
@@ -206,7 +191,7 @@ class Parser(object):
         
         return (ip, bool(~(local_bool ^ parent_bool)+2))
         
-    # Validate if the IP is either a OS variable (e.g. $HOME_NET) or a valid IPv4 or IPv6 address
+    # Validate if the IP is either an OS variable (e.g. $HOME_NET) or a valid IPv4 or IPv6 address
     def __validate_ip(self, ips):
         for ip, bool_ in ips:
             if isinstance(ip, str):
@@ -217,7 +202,9 @@ class Parser(object):
                         ipaddress.ip_address(ip)
         return True
     
-
+    # Parses one port or a list of ports. 
+    # Each input port turns to the following output (<value>, <bool>) 
+    # <value> is the actual port (or port range) and <bool> indicates if the actual value or the negatated value should be used
     def __port(self, port):
         parsed_ports = []
         if isinstance(port, str):
@@ -235,7 +222,7 @@ class Parser(object):
                 raise ValueError("Unvalid port or variable: %s" % port)
         return parsed_ports  
      
-       
+    # Parses an individual port or port range
     def __parse_port(self, port, parent_bool):
         local_bool = True
         if port.startswith("!"):
@@ -258,37 +245,25 @@ class Parser(object):
         
         return (port, bool(~(local_bool ^ parent_bool)+2))
     
-                
+    # Validates if the port is an OS variable (e.g. $HTTP_PORTS) or inside the valid port range
     def __validate_port(self, ports):
         for port, bool_ in ports:
             if isinstance(port, str):
                 if not self.dicts.port_variables(port) and not re.match(r"^\$+", port):
-                    if re.search(":", port):
-                        range_ = port.split(":")
-                        if len(range_) != 2 or "!" in range_[1] :
-                            raise ValueError("Wrong range values")
-                        
-                        open_range = False
-                        for element in range_:
-                            if not element:
-                                open_range = True
-                                continue
-                            if self.dicts.port_variables(element) or re.search(r"^\$+", element):
-                                continue
-                            
-                            if int(element) < 0 or int(element) > 65535:
-                                raise ValueError("Port is out of range %s" % element)
-                            
-                        if(not open_range):
-                            if(int(range_[0]) > int(range_[-1])):
-                                raise ValueError("Port range is malformed %s" % port)
-                            
-                    elif int(port) < 0 or int(port) > 65535:
+                    if int(port) < self.MIN_PORT or int(port) > self.MAX_PORT:
                         raise ValueError("Port is out of range %s" % port)
+            elif isinstance(port, range):    
+              
+               if  port.start > port.stop:
+                   raise ValueError("Invalid port range %s" % port)
+               
+               if (port.start < self.MIN_PORT or port.start > self.MAX_PORT+1) or (port.stop < self.MIN_PORT or port.stop > self.MAX_PORT+1):
+                    raise ValueError("Port is out of range %s" % port)
+               
         return True
               
 
-
+    # Validates the direction
     def __direction(self, dst):
         destinations = {"->": "unidirectional",
                         "<>": "bidirectional"}

@@ -1,8 +1,7 @@
 ### This file contains a class that parsers the network variables defined by snort
-##  Works for Snort 2.* configuration (future versions will inlcude Snort 3.* and SUricata)
+##  Works for Snort 2.* configuration (future versions will inlcude Snort 3.* and Suricata)
 
 import re
-#from compiler.snort_rule_parser.option_validation_dicts import Dicts
 
 class SnortConfiguration():
     ports = {}
@@ -19,7 +18,7 @@ class SnortConfiguration():
 
         self.__parse()
     
-
+    # Parses the Snort configuration file and the classification priority
     def __parse(self):
         if(self.snort_version == 2):
             snort_config_file= "{}/snort.conf".format(self.configuration_dir) 
@@ -50,9 +49,9 @@ class SnortConfiguration():
                     name = portvar_line_elements[1]
                     self.ports[name] = self.__parse_ports(portvar_line_elements[2].rstrip('\n'))
            
-
-    ### TODO parse with more than 1 sub list in the same level i.e [[], [[], []]]. Needed?
-    ### TODO validate input line
+    # Parses one IP or a list of IPs
+    ### TODO parse with more than 1 sub list in the same level i.e [[], [[], []]]. Needed???
+    ### TODO validate input line?
     def __parse_ips(self, raw_ips):
         if raw_ips == "any":
             return [("0.0.0.0/0", True)]
@@ -67,7 +66,7 @@ class SnortConfiguration():
 
         return parsed_ips  
 
-
+    # Removes all sub-lists and parses the individual elements
     def __flatten_list(self, _list, individual_parser):
         list_deny = True
         if _list.startswith("!"):
@@ -115,6 +114,8 @@ class SnortConfiguration():
 
 
 
+
+    # Parses one port or a list of ports
     def __parse_ports(self, raw_ports):
         if raw_ports == "any":
             return [(range(self.MIN_PORT, self.MAX_PORT+1), True)]
@@ -129,15 +130,14 @@ class SnortConfiguration():
 
         return parsed_ports   
 
-
-
-    # Parses a raw port 
+    # Parses a raw port that might contain the following operators: "!" (negation), ":" (range), "$" (variable)
     def __parse_port(self, raw_port, parent_bool):
         local_bool = True
         if raw_port.startswith("!"):
             raw_port = raw_port[1:]
             local_bool = False
 
+        # Replaces the variable for the true values and updates the bool indicating the negation operator
         if re.match(r'^!?\$', raw_port):
             ports = self.ports[re.sub(r'^!?\$', '', raw_port)]
             return_ports = []
@@ -145,6 +145,7 @@ class SnortConfiguration():
             for value, bool_ in ports:
                 return_ports.append((value, bool(~(bool_ ^ bool_multiplier)+2)))  #xnor because !! = true
             return return_ports
+        # Replaces a port range with the actual values
         elif re.match(r'^(!?[0-9]+:|:[0-9]+)', raw_port):
             range_ = raw_port.split(":")
             if len(range_) != 2 or "!" in range_[1]:
@@ -163,8 +164,7 @@ class SnortConfiguration():
 
 
 
-
-    # Reads line by line and parses lines containing classification priority
+    # Reads line by line and parses lines containing classification priority (lines starting with "config classification:")
     def __parse_classification_priority(self, priority_classification_file):    
         with open(priority_classification_file, 'r') as class_file:
             lines  = class_file.readlines()

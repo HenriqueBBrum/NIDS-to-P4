@@ -6,7 +6,6 @@
 
 ## Standart and 3rd-party imports
 import sys
-import copy
 import gc
 from datetime import datetime
 from binascii import hexlify
@@ -31,17 +30,16 @@ def main(config_path, rules_path):
     config = SnortConfiguration(snort_version=2, configuration_dir=config_path)
     ignored_rule_files = []
     print("Getting and parsing rules.....")
-    rules = get_rules(rules_path, ignored_rule_files) # Get all rules from multiple files or just one
+    print("Adjusting rules. Replacing variables and grouping ports into ranges...")
+
+    original_rules, final_rules = get_rules(rules_path, ignored_rule_files, config) # Get all rules from multiple files or just one
     # stats = RuleStatistics(rules, config)
     # stats.print_all()
     # rules_sid_rev_map = rules_to_sid_rev_map(rules)
-
-    print("Adjusting rules. Replacing variables and grouping ports into ranges.....")
-    new_rules = update_rules_ip_and_ports(rules, config)
-  
     
+    exit()
     print("Converting parsed rules to P4 table match")
-    p4_rules = convert_rules_to_P4_table_match(new_rules, config)
+    p4_rules = convert_rules_to_P4_table_match(final_rules, config)
 
     # Step 6) Deduplicate rules
     print("Deduplication of rules")
@@ -124,75 +122,6 @@ def main(config_path, rules_path):
     # print(json.dumps(p4_rule_list_dict))
 
 
-# For each rule update the IPs and port variables. Also groups values if the header field is src_port or dst_port
-def update_rules_ip_and_ports(rules, config):
-    rules_copy = copy.deepcopy(rules)
-
-    for rule in rules_copy:
-        rule.header['source'] = update_rule_ip_and_ports(rule.header['source'],  config.ip_addresses, False)
-        rule.header['src_port'] = update_rule_ip_and_ports(rule.header['src_port'], config.ports, True)
-        rule.header['destination'] = update_rule_ip_and_ports(rule.header['destination'], config.ip_addresses, False)
-        rule.header['dst_port'] = update_rule_ip_and_ports(rule.header['dst_port'], config.ports, True)
-    return rules_copy
-
-
-# Substitute system variables for the real values in the config file and group ports into range
-def update_rule_ip_and_ports(header_field, config_variables, is_port):
-    var_sub_results = []
-
-    for value, bool_ in header_field:
-        if isinstance(value, str) and "$" in value :
-            key_temp = value.replace('$', '')
-            variable_values = config_variables.get(key_temp, "ERROR")
-            if not bool_:
-                for index, (variable_value, variable_value_bool) in enumerate(variable_values):
-                    variable_values[index] = (variable_value, bool(~(bool_ ^ variable_value_bool)+2))
-            
-            var_sub_results.extend(variable_values)
-        else:
-            var_sub_results.append((value, bool_))
-    
-    if is_port:
-        return group_ports_into_ranges(var_sub_results)
-    else:
-        return var_sub_results
-           
-# Groups ports into ranges. Assumes no intersecting range value and duplicates. Sill simple
-def group_ports_into_ranges(ports):
-    count = 0
-    initial_port = -1
-    grouped_ports = []
-    if len(ports) == 1:
-        return ports
-
-    sorted_ports = sorted(ports, key=lambda x: (int(x[0].start) if isinstance(x[0], range) else int(x[0])))
-    for index, item in enumerate(sorted_ports):
-        if isinstance(item[0], range):
-            grouped_ports.append(item)
-            continue
-
-        if count == 0:
-            initial_port = item[0]
-            bool_ = item[1]
-
-        try:
-            next_tuple= sorted_ports[index+1] 
-            if isinstance(next_tuple[0], range):
-                next_tuple= (-1, False)
-        except Exception as e:
-            next_tuple= (-1, False)
-
-        if int(item[0]) == int(next_tuple[0]) - 1 and item[1]==next_tuple[1]:
-            count+=1
-        else:
-            if count == 0:
-                grouped_ports.append((initial_port, bool_))
-                continue
-            
-            grouped_ports.append((range(int(initial_port), int(initial_port)+count), bool_))
-            count = 0
-            initial_port = -1
-    return grouped_ports
 
 
 # Flattens snort rules to multiple p4 table entries
@@ -402,10 +331,6 @@ def reduce_rules_from_deduped(rules):
                         del rules_dict[rule_target.match.to_match_string()]
 
     return rules_dict.values()
-
-
-
-
 
 
 
