@@ -6,18 +6,18 @@
 
 ## Standart and 3rd-party imports
 import sys
-import gc
+import copy
 from datetime import datetime
 from binascii import hexlify
 from socket import inet_aton
-from ipaddress import ip_network
-
+from ipaddress import ip_network, ip_address, IPv4Network
 
 ## Local imports
 from snort_config_parser import SnortConfiguration
 from rules_parser import get_rules, rules_to_sid_rev_map
 from rule_statistics import RuleStatistics
 from P4_related_classes import *
+from rule_related_classes import *
 
 # from utils import convert_ip_network_to_hex
 # from port_mask import mask_range
@@ -29,31 +29,40 @@ PROTO_MAPPING = {'icmp': 1, 'ip': 4, 'tcp': 6, 'udp': 17}
 def main(config_path, rules_path):
     config = SnortConfiguration(snort_version=2, configuration_dir=config_path)
     ignored_rule_files = []
+   
     print("Getting and parsing rules.....")
-    print("Adjusting rules. Replacing variables and grouping ports into ranges...")
-
-    original_rules, final_rules = get_rules(rules_path, ignored_rule_files, config) # Get all rules from multiple files or just one
-    # stats = RuleStatistics(rules, config)
+    print("Splitting bidirectional rules...")
+    original_rules, fixed_bidirectional_rules = get_rules(rules_path, ignored_rule_files, config) # Get all rules from multiple files or just one
+    # stats = RuleStatistics(original_rules, config)
     # stats.print_all()
     # rules_sid_rev_map = rules_to_sid_rev_map(rules)
     
-    exit()
-    print("Converting parsed rules to P4 table match")
-    p4_rules = convert_rules_to_P4_table_match(final_rules, config)
-
-    # Step 6) Deduplicate rules
     print("Deduplication of rules")
-    deduped_p4_rules = dedup_P4_rules(p4_rules)
+    deduped_rules = dedup_rules(fixed_bidirectional_rules, config)
+
+    print("Adjusting rules. Replacing variables and grouping ports into ranges...")
+    modified_rules = replace_variables_and_group_ports(deduped_rules, config)
+   
+
+    print("Converting parsed rules to P4 table match")
+    ipv4_p4_rules, ipv6_p4_rules = convert_rules_to_P4_table_match(modified_rules, config)
+    
+
+    print("Deduplication of P4 rules")
+    deduped_ipv4_p4_rules = dedup_P4_rules(ipv4_p4_rules)
+    deduped_ipv6_p4_rules = dedup_P4_rules(ipv6_p4_rules)
     #p4id_rules = sum([compile_p4id_ternary_range_size(rule) for rule in p4_rules_dedup])
-    # # Step 7) Reduce rules
+    # Step 7) Reduce rules
 
     # p4_rules_reduced = reduce_rules_from_deduped(p4_rules_dedup)
     # p4id_rules_reduced = sum([compile_p4id_ternary_range_size(rule) for rule in p4_rules_reduced])
 
-    # print("Total processed rules: {}".format(len(rules)))
-    # print("Total processed valid rules: {}".format(len(transformed_rules_filtered)))
-    # print("Total processed p4 rules: {}".format(len(p4_rules)))
-    # print("Total processed p4 rules dedup: {}".format(len(p4_rules_dedup)))
+    print("Total original rules: {}".format(len(original_rules)))
+    print("Total rules after fixing bidirectional rules: {}".format(len(fixed_bidirectional_rules)))
+    print("Total processed rules dedup: {}".format(len(deduped_rules)))
+    print("Total processed p4 rules: {}".format(len(ipv4_p4_rules)+len(ipv6_p4_rules)))
+    print("Total processed p4 rules after deduping: {}".format(len(deduped_ipv4_p4_rules)+len(deduped_ipv6_p4_rules)))
+
     # print("Total processed p4 rules dedup p4id: {}".format(p4id_rules))
     # print("Total processed p4 rules reduced: {}".format(len(p4_rules_reduced)))
     # print("Total processed p4 rules reduced p4id: {}".format(p4id_rules_reduced))
@@ -122,77 +131,168 @@ def main(config_path, rules_path):
     # print(json.dumps(p4_rule_list_dict))
 
 
+# Deduplicate rules with same match. Save each duplicate rule's priority and sid/rev 
+def dedup_rules(p4_rules, config):
+    deduped_rules = {}
+    for rule in p4_rules:
+        rule_id = rule.rule_id()
+        if rule_id not in deduped_rules:
+            deduped_rules[rule_id] = AggregatedRule(header=rule.header, flags=get_simple_option_value("flags", rule.options, []), \
+                                                            priority_list=[], sid_rev_list=[])
+
+        sid = get_simple_option_value("sid", rule.options)
+        rev = get_simple_option_value("rev", rule.options)
+        sid_rev_string = f'{sid}/{rev}'
+
+        classtype = get_simple_option_value("classtype", rule.options)
+        priority = config.classification_priority.get(classtype)
+        
+        deduped_rules[rule_id].priority_list.append(priority)
+        deduped_rules[rule_id].sid_rev_list.append(sid_rev_string)
+
+    return deduped_rules.values()
+
+
+
+
+def replace_variables_and_group_ports(deduped_rules, config):
+    modified_rules = []
+    for rule in deduped_rules:
+        copied_header = copy.deepcopy(rule.header)
+        copied_header['source'] = __update_ip_and_ports(copied_header['source'],  config.ip_addresses, False)
+        copied_header['src_port'] = __update_ip_and_ports(copied_header['src_port'],  config.ports, False)
+        copied_header['destination'] = __update_ip_and_ports(copied_header['destination'], config.ip_addresses, False)
+        copied_header['dst_port'] = __update_ip_and_ports(copied_header['dst_port'],  config.ports, False)
+
+        modified_rules.append(AggregatedRule(copied_header, rule.flags, rule.priority_list, rule.sid_rev_list))
+
+    return modified_rules
+
+
+# Substitute system variables for the real values in the config file and group ports into range
+def __update_ip_and_ports(header_field, config_variables, is_port):
+    var_sub_results = []
+    for value, bool_ in header_field:
+        if isinstance(value, str) and "$" in value :
+            key_temp = value.replace('$', '')
+            variable_values = config_variables.get(key_temp, "ERROR")
+            if not bool_:
+                for index, (variable_value, variable_value_bool) in enumerate(variable_values):
+                    variable_values[index] = (variable_value, bool(~(bool_ ^ variable_value_bool)+2))
+            
+            var_sub_results.extend(variable_values)
+        else:
+            var_sub_results.append((value, bool_))
+    
+    if is_port:
+        return __group_ports_into_ranges(var_sub_results)
+    else:
+        return var_sub_results
+           
+# Groups ports into ranges. Assumes no intersecting range value and duplicates. Sill simple
+def __group_ports_into_ranges(ports):
+    count = 0
+    initial_port = -1
+    grouped_ports = []
+    if len(ports) == 1:
+        return ports
+
+    sorted_ports = sorted(ports, key=lambda x: (int(x[0].start) if isinstance(x[0], range) else int(x[0])))
+    for index, item in enumerate(sorted_ports):
+        if isinstance(item[0], range):
+            grouped_ports.append(item)
+            continue
+
+        if count == 0:
+            initial_port = item[0]
+            bool_ = item[1]
+
+        try:
+            next_tuple= sorted_ports[index+1] 
+            if isinstance(next_tuple[0], range):
+                next_tuple= (-1, False)
+        except Exception as e:
+            next_tuple= (-1, False)
+
+        if int(item[0]) == int(next_tuple[0]) - 1 and item[1]==next_tuple[1]:
+            count+=1
+        else:
+            if count == 0:
+                grouped_ports.append((initial_port, bool_))
+                continue
+            
+            grouped_ports.append((range(int(initial_port), int(initial_port)+count), bool_))
+            count = 0
+            initial_port = -1
+    return grouped_ports
 
 
 # Flattens snort rules to multiple p4 table entries
-def convert_rules_to_P4_table_match(parsed_rules, config):
-    rules = []
-    for parsed_rule in parsed_rules:
-        P4_rules = rule_to_P4_table_match(parsed_rule, config)
-        rules.extend(P4_rules)
+def convert_rules_to_P4_table_match(grouped_rules, config):
+    ipv4_P4_rules, ipv6_P4_rules = [], []
+    for parsed_rule in grouped_rules:
+        ipv4_rules, ivp6_rules = rule_to_P4_table_match(parsed_rule)
 
-    return rules
+        ipv4_P4_rules.extend(ipv4_rules)
+        ipv6_P4_rules.extend(ivp6_rules)
+    return ipv4_P4_rules, ipv6_P4_rules
 
-def rule_to_P4_table_match(parsed_rule, config):
-    proto = parsed_rule.header.get('proto')
-    src_ip_list = parsed_rule.header.get('source')
-    src_port_list = parsed_rule.header.get('src_port')
-    dst_ip_list = parsed_rule.header.get('destination')
-    dst_port_list = parsed_rule.header.get('dst_port')
+def rule_to_P4_table_match(grouped_rule):
+    proto = grouped_rule.header.get('proto')
+    src_ip_list = grouped_rule.header.get('source')
+    src_port_list = grouped_rule.header.get('src_port')
+    dst_ip_list = grouped_rule.header.get('destination')
+    dst_port_list = grouped_rule.header.get('dst_port')
 
     if proto not in PROTO_MAPPING:
         print("No mapping for proto {}".format(proto))
-        return []
-    
-    flags = []    
-    if "flags" in parsed_rule.options:
-        flags = get_simple_option_value("flags", parsed_rule.options, [])
+        return [], []
 
-    flat_p4_rules = []
+    ipv4_flat_P4_rules, ipv6_flat_P4_rules = [], []
     for src_ip in src_ip_list:
         for src_port in src_port_list:
             for dst_ip in dst_ip_list:
+                src_network = (convert_ip_to_network(src_ip[0]), src_ip[1])
+                dst_network= (convert_ip_to_network(dst_ip[0]), dst_ip[1])
+
+                if type(ip_network(src_network[0])) != type(ip_network(dst_network[0])):
+                    continue
+                
                 for dst_port in dst_port_list:
-                    sid = get_simple_option_value("sid", parsed_rule.options)
-                    rev = get_simple_option_value("rev", parsed_rule.options)
-                    classtype = get_simple_option_value("classtype", parsed_rule.options)
-                    priority = config.classification_priority.get(classtype)
+                    P4_rule_match = create_P4_table_match(proto, src_network, src_port, dst_network, dst_port, grouped_rule.flags)
+                    P4_rule = P4MatchAggregatedRule(P4_rule_match, grouped_rule.priority_list, grouped_rule.sid_rev_list)
 
-                    P4_rule_match = create_P4_table_match(proto, src_ip, src_port, dst_ip, dst_port, flags)
-                    P4_rule = P4CompiledIDSMatchRule(match=P4_rule_match, priority=priority, sid=sid, rev=rev)
-                    flat_p4_rules.append(P4_rule)
+                    if isinstance(ip_network(src_network[0]), IPv4Network):
+                        ipv4_flat_P4_rules.append(P4_rule)
+                    else:
+                        ipv6_flat_P4_rules.append(P4_rule)
 
-    return flat_p4_rules
+    return ipv4_flat_P4_rules, ipv6_flat_P4_rules
 
 # Returns value of key in rule options. Option value format: [(option_index, [option_index_values, ...]), ...]
 def get_simple_option_value(key, options, default="ERROR"):
     try:
         return options[key][0][1][0]
     except Exception as e:
-        print("Error when searching for key {}in rule options \n Returning {}: {}".format(key, default))
+        #print("Error when searching for key {} in rule options \n Returning: {}".format(key, default))
         return default
 
 # Converts Snort rule header values to P4 table entries
-def create_P4_table_match(proto, src_ip, src_port, dst_ip, dst_port, flags):
-    src_address, src_mask = convert_ip_network_to_hex(src_ip[0])
-    dst_address, dst_mask = convert_ip_network_to_hex(dst_ip[0])
-
+def create_P4_table_match(proto, src_network, src_port, dst_network, dst_port, flags):
     flags, flags_mask = convert_flags_to_ternary(flags)
 
     p4_match_rule = P4CompiledMatchRule()
     p4_match_rule.proto = PROTO_MAPPING.get(proto, None)
 
-    p4_match_rule.header_value_bool["src_addr"] = src_ip[1]
-    p4_match_rule.header_value_bool["src_port"] = src_port[1]
-    p4_match_rule.header_value_bool["dst_addr"] = dst_ip[1]
-    p4_match_rule.header_value_bool["dst_port"] = dst_port[1]
+    # p4_match_rule.header_value_bool["src_addr"] = src_network
+    # p4_match_rule.header_value_bool["src_port"] = src_port[1] # (value, bool)
+    # p4_match_rule.header_value_bool["dst_addr"] = dst_network
+    # p4_match_rule.header_value_bool["dst_port"] = dst_port[1]
 
-    p4_match_rule.src_addr = src_address
-    p4_match_rule.src_addr_mask = src_mask
+    p4_match_rule.src_network = src_network
     p4_match_rule.src_port = src_port[0]
 
-    p4_match_rule.dst_addr = dst_address
-    p4_match_rule.dst_addr_mask = dst_mask
+    p4_match_rule.dst_network = dst_network
     p4_match_rule.dst_port= dst_port[0]
 
     p4_match_rule.flags = flags
@@ -200,19 +300,14 @@ def create_P4_table_match(proto, src_ip, src_port, dst_ip, dst_port, flags):
 
     return p4_match_rule
 
-def convert_ip_network_to_hex(ip):
+def convert_ip_to_network(ip):
     if "/" not in ip:
-        ip += "/32"
+        if ":" in ip:
+            ip += "/128"
+        else:
+            ip += "/32"
 
-    network = ip_network(ip, False)
-    try:
-        ip = hexlify(inet_aton(str(network.network_address))).upper()
-        mask = hexlify(inet_aton(str(network.netmask))).upper()
-        return ip, mask
-    except Exception as e:
-        print("Error on ip network {}: {}".format(ip_network, e))
-
-    return convert_ip_network_to_hex('255.255.255.255')
+    return ip
 
 # Not supported
 #     + - ALL flag, match on all specified flags plus any others
@@ -252,24 +347,19 @@ def convert_flags_to_ternary(flags_input, rule=None):
     return (result_value, 0xff)
 
 
-
-# Agreggate rules with same match. Save each duplicate rule's priority and sid/rev 
 def dedup_P4_rules(p4_rules):
-    deduped_rules = {}
+    deduped_p4_rules = {}
     for rule in p4_rules:
-        print(rule)
         rule_match = rule.match.to_string()
-        if rule_match not in deduped_rules:
-            deduped_rules[rule_match] = P4MatchAggregatedRule(match=rule.match, priority_list=[], sid_rev_list=[])
+        if rule_match in deduped_p4_rules:
+            print(rule_match, rule.sid_rev_list)
+        if rule_match not in deduped_p4_rules:
+            deduped_p4_rules[rule_match] = P4MatchAggregatedRule(rule.match, [], [])
+        
+        deduped_p4_rules[rule_match].priority_list.extend(rule.priority_list)
+        deduped_p4_rules[rule_match].sid_rev_list.extend(rule.sid_rev_list)
 
-        deduped_rules[rule_match].priority_list.append(rule.priority)
-        deduped_rules[rule_match].sid_rev_list.append(rule.sid_rev_string())
-
-        print(deduped_rules[rule_match])
-        exit(0)
-    return deduped_rules.values()
-
-
+    return deduped_p4_rules.values()
 
 
 

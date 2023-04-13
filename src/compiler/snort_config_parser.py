@@ -1,6 +1,7 @@
 ### This file contains a class that parsers the network variables defined by snort
 ##  Works for Snort 2.* configuration (future versions will inlcude Snort 3.* and Suricata)
 
+
 import re
 
 class SnortConfiguration():
@@ -41,13 +42,13 @@ class SnortConfiguration():
                     break
 
                 if (line.startswith("ipvar")):
-                    ipvar_line_elements = line.split(" ") # ipvar NAME IPs
+                    ipvar_line_elements = line.split(" ", 2) # ipvar NAME IPs
                     name = ipvar_line_elements[1]
-                    self.ip_addresses[name] = self.__parse_ips(ipvar_line_elements[2].rstrip('\n'))
+                    self.ip_addresses[name] = self.__parse_ips(ipvar_line_elements[2].rstrip('\n').replace(" ",""))
                 elif(line.startswith("portvar")):
-                    portvar_line_elements = line.split(" ") # portvar NAME IPs
+                    portvar_line_elements = line.split(" ", 2) # portvar NAME IPs
                     name = portvar_line_elements[1]
-                    self.ports[name] = self.__parse_ports(portvar_line_elements[2].rstrip('\n'))
+                    self.ports[name] = self.__parse_ports(portvar_line_elements[2].rstrip('\n').replace(" ",""))
            
     # Parses one IP or a list of IPs
     ### TODO parse with more than 1 sub list in the same level i.e [[], [[], []]]. Needed???

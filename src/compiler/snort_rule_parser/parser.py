@@ -4,29 +4,13 @@ import collections
 import shlex
 from typing import Tuple, List, Dict, Any
 
+from rule_related_classes import Rule
+
 try:
     from .validation_dicts import Dicts
 except ImportError:
     from compiler.snort_rule_parser.validation_dicts import Dicts
 
-
-### Class representing a rule.
-class Rule(object):
-    def __init__(self, rule, header, options, has_negation):
-        self.rule = rule
-
-        self.header = header
-        self.options = options
-        self.has_negation = has_negation
-
-        self.data = {"header": self.header, "options": self.options}
-        self.all = self.data
-
-    def __getitem__(self, key):
-        if key == 'all':
-            return self.data
-        else:
-            return self.data[key]
         
 ### 
 #   Parses a Snort/Suricata rule and returns two dictionaris:
@@ -47,6 +31,10 @@ class Parser(object):
         options = self.__parse_options(rule) 
 
         return Rule(rule, header, options, has_negation)
+    
+    def str_rule_id(self):
+        return str(self.header)+self.options["flags"]
+       
 
     ### HEADER PARSING FUNCTIONS ###
     # Parses the rule header, validates it, and returns a dictionary

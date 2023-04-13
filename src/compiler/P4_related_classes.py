@@ -6,15 +6,13 @@ import attr
 class P4CompiledMatchRule(object):
     proto = attr.ib(default=0, order=False)
 
-    header_value_bool = attr.ib(default={"src_addr": True, "src_port": True, "dst_addr": True, "dst_port": True}, order=False)
+    #header_value_bool = attr.ib(default={"src_addr": True, "src_port": True, "dst_addr": True, "dst_port": True}, order=False)
 
-    src_addr = attr.ib(default=str(), order=False)
-    src_addr_mask = attr.ib(default=str(), order=False)
+    src_network = attr.ib(default=str(), order=False)
     src_port = attr.ib(default=str(), order=False)
 
 
-    dst_addr = attr.ib(default=str(), order=False)
-    dst_addr_mask = attr.ib(default=str(), order=False)
+    dst_network = attr.ib(default=str(), order=False)
     dst_port = attr.ib(default=str(), order=False)
 
     flags = attr.ib(default=0xff, order=False)
@@ -25,9 +23,9 @@ class P4CompiledMatchRule(object):
         dst_port_string = self.__port_to_P4_match(self.dst_port)
 
         return f'{hex(self.proto)} ' + \
-               f'0x{self.src_addr.decode("utf-8")}&&&0x{self.src_addr_mask.decode("utf-8")} ' + \
+               self.src_network[0] + " " + \
                src_port_string + \
-               f'0x{self.dst_addr.decode("utf-8")}&&&0x{self.dst_addr_mask.decode("utf-8")} ' + \
+               self.dst_network[0] + " " + \
                dst_port_string + \
                f'{hex(self.flags)}&&&{hex(self.flags_mask)}'
 
@@ -35,22 +33,21 @@ class P4CompiledMatchRule(object):
     def __port_to_P4_match(port):
         port_to_string = ""
         if(isinstance(port, range)):
-            port_to_string = f'{port.start}->{port.stop}'
+            port_to_string = f'{port.start}->{port.stop} '
         else:
             port_to_string = f'{port} '
 
         return port_to_string
 
-@attr.s
-class P4CompiledIDSMatchRule(object):
-    match = attr.ib(default=P4CompiledMatchRule(), order=False)
-    priority = attr.ib(default=-1, order=False)
-    sid = attr.ib(default=[], order=False)
-    rev = attr.ib(default=[], order=False)
+# @attr.s
+# class P4CompiledIDSMatchRule(object):
+#     match = attr.ib(default=P4CompiledMatchRule(), order=False)
+#     priority = attr.ib(default=-1, order=False)
+#     sid = attr.ib(default=[], order=False)
+#     rev = attr.ib(default=[], order=False)
 
-    def sid_rev_string(self):
-        return f'{self.sid}/{self.rev}'
-
+#     def sid_rev_string(self):
+#         return f'{self.sid}/{self.rev}'
 
 @attr.s
 class P4MatchAggregatedRule(object):
@@ -74,7 +71,6 @@ class P4MatchAggregatedRule(object):
         return {'match': self.match.to_match_string(),
                 'priority_list': self.priority_list,
                 'sid_list': self.sid_list}
-    
 
 @attr.s
 class P4CompiledRule(object):
