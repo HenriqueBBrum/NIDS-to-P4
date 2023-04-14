@@ -46,6 +46,8 @@ def __parse_rules(rule_file, snort_config):
                 swap_dir_rule.header['source'], swap_dir_rule.header['destination'] =  swap_dir_rule.header['destination'], swap_dir_rule.header['source']
                 swap_dir_rule.header['src_port'], swap_dir_rule.header['dst_port'] =  swap_dir_rule.header['dst_port'], swap_dir_rule.header['src_port']
 
+                copied_rule.header["source"][0][0]
+              
                 modified_rules.append(copied_rule)
                 modified_rules.append(swap_dir_rule)
             else:

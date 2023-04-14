@@ -22,6 +22,8 @@ from rule_related_classes import *
 # from utils import convert_ip_network_to_hex
 # from port_mask import mask_range
 
+MIN_PORT = 0
+MAX_PORT = 65535
 
 
 PROTO_MAPPING = {'icmp': 1, 'ip': 4, 'tcp': 6, 'udp': 17}
@@ -40,10 +42,11 @@ def main(config_path, rules_path):
     print("Deduplication of rules")
     deduped_rules = dedup_rules(fixed_bidirectional_rules, config)
 
-    print("Adjusting rules. Replacing variables and grouping ports into ranges...")
-    modified_rules = replace_variables_and_group_ports(deduped_rules, config)
+    print("Adjusting rules. Replacing variables,grouping ports into ranges and adjsuting negated port rules")
+    modified_rules = adjust_rules(deduped_rules, config) # Currently negated IPs are not supported
    
 
+    print("Adjusting negated")
     print("Converting parsed rules to P4 table match")
     ipv4_p4_rules, ipv6_p4_rules = convert_rules_to_P4_table_match(modified_rules, config)
     
@@ -131,11 +134,12 @@ def main(config_path, rules_path):
     # print(json.dumps(p4_rule_list_dict))
 
 
-# Deduplicate rules with same match. Save each duplicate rule's priority and sid/rev 
+# Deduplicate signature rules with same match. Save each duplicate rule's priority and sid/rev 
 def dedup_rules(p4_rules, config):
     deduped_rules = {}
     for rule in p4_rules:
         rule_id = rule.rule_id()
+       
         if rule_id not in deduped_rules:
             deduped_rules[rule_id] = AggregatedRule(header=rule.header, flags=get_simple_option_value("flags", rule.options, []), \
                                                             priority_list=[], sid_rev_list=[])
@@ -153,29 +157,38 @@ def dedup_rules(p4_rules, config):
     return deduped_rules.values()
 
 
-
-
-def replace_variables_and_group_ports(deduped_rules, config):
+# Replace system variables, modify negated ports and group ports
+def adjust_rules(deduped_rules, config):
     modified_rules = []
     for rule in deduped_rules:
         copied_header = copy.deepcopy(rule.header)
-        copied_header['source'] = __update_ip_and_ports(copied_header['source'],  config.ip_addresses, False)
-        copied_header['src_port'] = __update_ip_and_ports(copied_header['src_port'],  config.ports, False)
-        copied_header['destination'] = __update_ip_and_ports(copied_header['destination'], config.ip_addresses, False)
-        copied_header['dst_port'] = __update_ip_and_ports(copied_header['dst_port'],  config.ports, False)
+       
+        copied_header['source'] = replace_system_variables(copied_header['source'],  config.ip_addresses)
+        copied_header['src_port'] = replace_system_variables(copied_header['src_port'],  config.ports)
+        copied_header['destination'] = replace_system_variables(copied_header['destination'], config.ip_addresses)
+        copied_header['dst_port'] = replace_system_variables(copied_header['dst_port'],  config.ports)
+
+        if(IP_negated(copied_header["source"]) or IP_negated(copied_header["destination"])):
+            continue
+    
+        copied_header["src_port"] = modify_negated_ports(copied_header["src_port"])
+        copied_header["dst_port"] = modify_negated_ports(copied_header["dst_port"])
+
+        copied_header['src_port'] = group_ports_into_ranges(copied_header['src_port'])
+        copied_header['dst_port'] = group_ports_into_ranges(copied_header['dst_port'])
 
         modified_rules.append(AggregatedRule(copied_header, rule.flags, rule.priority_list, rule.sid_rev_list))
 
     return modified_rules
 
-
 # Substitute system variables for the real values in the config file and group ports into range
-def __update_ip_and_ports(header_field, config_variables, is_port):
+def replace_system_variables(header_field, config_variables):
     var_sub_results = []
     for value, bool_ in header_field:
         if isinstance(value, str) and "$" in value :
             key_temp = value.replace('$', '')
-            variable_values = config_variables.get(key_temp, "ERROR")
+            variable_values = copy.deepcopy(config_variables.get(key_temp, "ERROR"))
+
             if not bool_:
                 for index, (variable_value, variable_value_bool) in enumerate(variable_values):
                     variable_values[index] = (variable_value, bool(~(bool_ ^ variable_value_bool)+2))
@@ -183,14 +196,11 @@ def __update_ip_and_ports(header_field, config_variables, is_port):
             var_sub_results.extend(variable_values)
         else:
             var_sub_results.append((value, bool_))
-    
-    if is_port:
-        return __group_ports_into_ranges(var_sub_results)
-    else:
-        return var_sub_results
+
+    return var_sub_results
            
 # Groups ports into ranges. Assumes no intersecting range value and duplicates. Sill simple
-def __group_ports_into_ranges(ports):
+def group_ports_into_ranges(ports):
     count = 0
     initial_port = -1
     grouped_ports = []
@@ -226,6 +236,31 @@ def __group_ports_into_ranges(ports):
             initial_port = -1
     return grouped_ports
 
+# Checks if an IP list has a negated entry
+def IP_negated(ip_list):
+    for ip in ip_list:
+        if ip[1] == False:
+            print("Negated IPs are not supported ", ip)
+            return True
+
+    return False
+
+# Exchange the negated ports by their positive counterparts e.g., !10 == (range(0, 10), range(11, 65535)) 
+def modify_negated_ports(ports):
+    new_port_list = []
+    for port in ports:
+        if not port[1]:
+            if isinstance(port[0], range):
+                new_port_list.append((range(MIN_PORT, port[0].start), True))
+                new_port_list.append((range(port[0].stop, MAX_PORT+1), True))
+            else:
+                new_port_list.append((range(MIN_PORT, int(port[0])), True))
+                new_port_list.append((range(int(port[0])+1, MAX_PORT+1), True))
+        else:
+            new_port_list.append(port)
+
+    return new_port_list
+
 
 # Flattens snort rules to multiple p4 table entries
 def convert_rules_to_P4_table_match(grouped_rules, config):
@@ -252,8 +287,8 @@ def rule_to_P4_table_match(grouped_rule):
     for src_ip in src_ip_list:
         for src_port in src_port_list:
             for dst_ip in dst_ip_list:
-                src_network = (convert_ip_to_network(src_ip[0]), src_ip[1])
-                dst_network= (convert_ip_to_network(dst_ip[0]), dst_ip[1])
+                src_network = (convert_address_to_network(src_ip[0]), src_ip[1])
+                dst_network= (convert_address_to_network(dst_ip[0]), dst_ip[1])
 
                 if type(ip_network(src_network[0])) != type(ip_network(dst_network[0])):
                     continue
@@ -300,7 +335,7 @@ def create_P4_table_match(proto, src_network, src_port, dst_network, dst_port, f
 
     return p4_match_rule
 
-def convert_ip_to_network(ip):
+def convert_address_to_network(ip):
     if "/" not in ip:
         if ":" in ip:
             ip += "/128"
@@ -347,12 +382,12 @@ def convert_flags_to_ternary(flags_input, rule=None):
     return (result_value, 0xff)
 
 
+# Deduplicate p4 table entries with same match. Save each duplicate rule's priority and sid/rev 
 def dedup_P4_rules(p4_rules):
     deduped_p4_rules = {}
     for rule in p4_rules:
         rule_match = rule.match.to_string()
-        if rule_match in deduped_p4_rules:
-            print(rule_match, rule.sid_rev_list)
+       
         if rule_match not in deduped_p4_rules:
             deduped_p4_rules[rule_match] = P4MatchAggregatedRule(rule.match, [], [])
         
@@ -401,24 +436,24 @@ def reduce_rules_from_deduped(rules):
     rules_dict = {}
     for rule in rules:
         rules_list.append(rule)
-        rules_dict[rule.match.to_match_string()] = rule
+        rules_dict[rule.match.to_string()] = rule
 
     while (len(rules_list) > 0):
         rule = rules_list.pop()
         for rule_target in rules_list:
-            if rule.match.to_match_string() in rules_dict and rule_target.match.to_match_string() in rules_dict:
+            if rule.match.to_string() in rules_dict and rule_target.match.to_string() in rules_dict:
                 if is_rule_within(rule, rule_target):
-                    # Update rule target
-                    rules_dict[rule_target.match.to_match_string()].sid_list.extend(rule.sid_list)
-                    rules_dict[rule_target.match.to_match_string()].priority_list.extend(rule.priority_list)
-                    if rule.match.to_match_string() in rules_dict:
-                        del rules_dict[rule.match.to_match_string()]
+                    rules_dict[rule_target.match.to_string()].sid_list.extend(rule.sid_rev_list)
+                    rules_dict[rule_target.match.to_string()].priority_list.extend(rule.priority_list)
+                    
+                    del rules_dict[rule.match.to_string()]
                 elif is_rule_within(rule_target, rule):
-                    # Update rule
-                    rules_dict[rule.match.to_match_string()].sid_list.extend(rule_target.sid_list)
-                    rules_dict[rule.match.to_match_string()].priority_list.extend(rule_target.priority_list)
-                    if rule_target.match.to_match_string() in rules_dict:
-                        del rules_dict[rule_target.match.to_match_string()]
+                    rules_dict[rule.match.to_string()].sid_list.extend(rule_target.sid_rev_list)
+                    rules_dict[rule.match.to_string()].priority_list.extend(rule_target.priority_list)
+                    
+                    del rules_dict[rule_target.match.to_string()]
+            elif rule.match.to_string() not in rules_dict:
+                break
 
     return rules_dict.values()
 

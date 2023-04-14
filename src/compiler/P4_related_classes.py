@@ -39,16 +39,6 @@ class P4CompiledMatchRule(object):
 
         return port_to_string
 
-# @attr.s
-# class P4CompiledIDSMatchRule(object):
-#     match = attr.ib(default=P4CompiledMatchRule(), order=False)
-#     priority = attr.ib(default=-1, order=False)
-#     sid = attr.ib(default=[], order=False)
-#     rev = attr.ib(default=[], order=False)
-
-#     def sid_rev_string(self):
-#         return f'{self.sid}/{self.rev}'
-
 @attr.s
 class P4MatchAggregatedRule(object):
     match = attr.ib(default=P4CompiledMatchRule(), order=False)
@@ -85,19 +75,3 @@ class P4CompiledRule(object):
         parsed_params = " ".join(params)
         return f'table_add {self.table} {self.action} {self.match.to_match_string()} => {parsed_params} {self.priority}'
 
-# @attr.s
-# class P4Rule(object):
-#     action = attr.ib(default=str(), order=False)
-#     proto = attr.ib(default=0, order=False)
-#     src_addr = attr.ib(default=str(), order=False)
-#     src_port = attr.ib(default=str(), order=False)
-#     dst_addr = attr.ib(default=str(), order=False)
-#     dst_port = attr.ib(default=str(), order=False)
-#     priority = attr.ib(default=str(), order=False)
-
-# @attr.s
-# class AggregatedP4Rule(object):
-#     p4_rule = attr.ib(default=P4Rule(), order=False)
-#     min_priority = attr.ib(default=0, order=False)
-#     max_priority = attr.ib(default=0, order=False)
-#     srids = attr.ib(default=[], order=False)
