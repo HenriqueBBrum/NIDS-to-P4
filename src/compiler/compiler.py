@@ -11,6 +11,7 @@ from datetime import datetime
 from binascii import hexlify
 from socket import inet_aton
 from ipaddress import ip_network, ip_address, IPv4Network
+from datetime import datetime
 
 ## Local imports
 from snort_config_parser import SnortConfiguration
@@ -50,14 +51,18 @@ def main(config_path, rules_path):
     print("Converting parsed rules to P4 table match")
     ipv4_p4_rules, ipv6_p4_rules = convert_rules_to_P4_table_match(modified_rules, config)
     
-
     print("Deduplication of P4 rules")
     deduped_ipv4_p4_rules = dedup_P4_rules(ipv4_p4_rules)
     deduped_ipv6_p4_rules = dedup_P4_rules(ipv6_p4_rules)
+    
+  
     #p4id_rules = sum([compile_p4id_ternary_range_size(rule) for rule in p4_rules_dedup])
-    # Step 7) Reduce rules
 
-    # p4_rules_reduced = reduce_rules_from_deduped(p4_rules_dedup)
+   
+
+    reduced_ipv4_p4_rules = reduce_rules_from_deduped(deduped_ipv4_p4_rules)
+    reduced_ipv6_p4_rules = reduce_rules_from_deduped(deduped_ipv6_p4_rules)
+
     # p4id_rules_reduced = sum([compile_p4id_ternary_range_size(rule) for rule in p4_rules_reduced])
 
     print("Total original rules: {}".format(len(original_rules)))
@@ -67,7 +72,7 @@ def main(config_path, rules_path):
     print("Total processed p4 rules after deduping: {}".format(len(deduped_ipv4_p4_rules)+len(deduped_ipv6_p4_rules)))
 
     # print("Total processed p4 rules dedup p4id: {}".format(p4id_rules))
-    # print("Total processed p4 rules reduced: {}".format(len(p4_rules_reduced)))
+    print("Total processed p4 rules reduced: {}".format(len(reduced_ipv4_p4_rules)+len(reduced_ipv6_p4_rules)))
     # print("Total processed p4 rules reduced p4id: {}".format(p4id_rules_reduced))
 
     '''
@@ -287,17 +292,18 @@ def rule_to_P4_table_match(grouped_rule):
     for src_ip in src_ip_list:
         for src_port in src_port_list:
             for dst_ip in dst_ip_list:
-                src_network = (convert_address_to_network(src_ip[0]), src_ip[1])
-                dst_network= (convert_address_to_network(dst_ip[0]), dst_ip[1])
+                src_network = convert_address_to_network(src_ip[0])
+                dst_network= convert_address_to_network(dst_ip[0])
 
-                if type(ip_network(src_network[0])) != type(ip_network(dst_network[0])):
+                if type(src_network) != type(dst_network):
+                    print("IPs in different version")
                     continue
                 
                 for dst_port in dst_port_list:
-                    P4_rule_match = create_P4_table_match(proto, src_network, src_port, dst_network, dst_port, grouped_rule.flags)
+                    P4_rule_match = create_P4_table_match(proto, src_network, src_port[0], dst_network, dst_port[0], grouped_rule.flags)
                     P4_rule = P4MatchAggregatedRule(P4_rule_match, grouped_rule.priority_list, grouped_rule.sid_rev_list)
 
-                    if isinstance(ip_network(src_network[0]), IPv4Network):
+                    if isinstance(ip_network(src_network), IPv4Network):
                         ipv4_flat_P4_rules.append(P4_rule)
                     else:
                         ipv6_flat_P4_rules.append(P4_rule)
@@ -319,16 +325,11 @@ def create_P4_table_match(proto, src_network, src_port, dst_network, dst_port, f
     p4_match_rule = P4CompiledMatchRule()
     p4_match_rule.proto = PROTO_MAPPING.get(proto, None)
 
-    # p4_match_rule.header_value_bool["src_addr"] = src_network
-    # p4_match_rule.header_value_bool["src_port"] = src_port[1] # (value, bool)
-    # p4_match_rule.header_value_bool["dst_addr"] = dst_network
-    # p4_match_rule.header_value_bool["dst_port"] = dst_port[1]
-
     p4_match_rule.src_network = src_network
-    p4_match_rule.src_port = src_port[0]
+    p4_match_rule.src_port = src_port
 
     p4_match_rule.dst_network = dst_network
-    p4_match_rule.dst_port= dst_port[0]
+    p4_match_rule.dst_port= dst_port
 
     p4_match_rule.flags = flags
     p4_match_rule.flags_mask = flags_mask
@@ -342,7 +343,7 @@ def convert_address_to_network(ip):
         else:
             ip += "/32"
 
-    return ip
+    return ip_network(ip)
 
 # Not supported
 #     + - ALL flag, match on all specified flags plus any others
@@ -394,10 +395,41 @@ def dedup_P4_rules(p4_rules):
         deduped_p4_rules[rule_match].priority_list.extend(rule.priority_list)
         deduped_p4_rules[rule_match].sid_rev_list.extend(rule.sid_rev_list)
 
-    return deduped_p4_rules.values()
+    return list(deduped_p4_rules.values())
 
+    
 
+def reduce_rules_from_deduped(rules):
+    rules_list = []
+    rules_groupped = {}
+    for rule in rules:
+        rules_list.append(rule)
 
+    for rule in rules_list:
+        new_group = True
+        for key, rule_group in rules_groupped.copy().items():
+            if is_rule_within(rule, rule_group):
+                rules_groupped[rule_group.match.to_string()].sid_rev_list.extend(rule.sid_rev_list)
+                rules_groupped[rule_group.match.to_string()].priority_list.extend(rule.priority_list)
+
+                new_group = False
+                break
+            elif is_rule_within(rule_group, rule):
+                if rule.match.to_string() not in rules_groupped:
+                    rules_groupped[rule.match.to_string()] = rule
+                    rules_groupped[rule.match.to_string()].sid_rev_list.extend(rule_group.sid_rev_list)
+                    rules_groupped[rule.match.to_string()].priority_list.extend(rule_group.priority_list)
+
+                del rules_groupped[rule_group.match.to_string()]
+
+                new_group = False
+
+        if new_group:
+            rules_groupped[rule.match.to_string()] = rule
+
+    return list(rules_groupped.values())
+
+# Is rule1 within rule2?
 def is_rule_within(rule1, rule2):
     r1_match = rule1.match
     r2_match = rule2.match
@@ -405,23 +437,22 @@ def is_rule_within(rule1, rule2):
     if r1_match.proto != r2_match.proto:
         return False
 
-    r1_src_port_end = 0xFFFF if r1_match.src_port_end == -1 else r1_match.src_port_end
-    r2_src_port_end = 0xFFFF if r2_match.src_port_end == -1 else r2_match.src_port_end
+    r1_src_port_start, r1_src_port_end = get_port_range_start_end(r1_match.src_port)
+    r2_src_port_start, r2_src_port_end = get_port_range_start_end(r2_match.src_port)
 
-    if not (r1_match.src_port_start >= r2_match.src_port_start and \
-            r1_src_port_end <= r2_src_port_end):
+    if not (r1_src_port_start >= r2_src_port_start and r1_src_port_end <= r2_src_port_end):
         return False
 
-    r1_dst_port_end = 0xFFFF if r1_match.dst_port_end == -1 else r1_match.dst_port_end
-    r2_dst_port_end = 0xFFFF if r2_match.dst_port_end == -1 else r2_match.dst_port_end
-    if not (r1_match.dst_port_start >= r2_match.dst_port_start and \
-            r1_dst_port_end <= r2_dst_port_end):
+    r1_dst_port_start, r1_dst_port_end = get_port_range_start_end(r1_match.dst_port)
+    r2_dst_port_start, r2_dst_port_end = get_port_range_start_end(r2_match.dst_port)
+
+    if not (r1_dst_port_start >=r2_dst_port_start and r1_dst_port_end <= r2_dst_port_end):
         return False
 
-    if r1_match.src_network.compare_networks(r2_match.src_network) == -1:
+    if not r1_match.src_network.subnet_of(r2_match.src_network):
         return False
 
-    if r1_match.dst_network.compare_networks(r2_match.dst_network) == -1:
+    if not r1_match.dst_network.subnet_of(r2_match.dst_network):
         return False
 
     if not (r1_match.flags == r2_match.flags and \
@@ -430,34 +461,11 @@ def is_rule_within(rule1, rule2):
 
     return True
 
-
-def reduce_rules_from_deduped(rules):
-    rules_list = []
-    rules_dict = {}
-    for rule in rules:
-        rules_list.append(rule)
-        rules_dict[rule.match.to_string()] = rule
-
-    while (len(rules_list) > 0):
-        rule = rules_list.pop()
-        for rule_target in rules_list:
-            if rule.match.to_string() in rules_dict and rule_target.match.to_string() in rules_dict:
-                if is_rule_within(rule, rule_target):
-                    rules_dict[rule_target.match.to_string()].sid_list.extend(rule.sid_rev_list)
-                    rules_dict[rule_target.match.to_string()].priority_list.extend(rule.priority_list)
-                    
-                    del rules_dict[rule.match.to_string()]
-                elif is_rule_within(rule_target, rule):
-                    rules_dict[rule.match.to_string()].sid_list.extend(rule_target.sid_rev_list)
-                    rules_dict[rule.match.to_string()].priority_list.extend(rule_target.priority_list)
-                    
-                    del rules_dict[rule_target.match.to_string()]
-            elif rule.match.to_string() not in rules_dict:
-                break
-
-    return rules_dict.values()
-
-
+def get_port_range_start_end(port):
+    if isinstance(port, range):
+        return port.start, port.stop-1
+    else:
+        return int(port), int(port)
 
 def compile_p4id_ternary_range_size(rule):
     src_size = mask_range(rule.match.src_port_start, rule.match.src_port_end)

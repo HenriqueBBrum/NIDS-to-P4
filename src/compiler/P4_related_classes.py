@@ -6,8 +6,6 @@ import attr
 class P4CompiledMatchRule(object):
     proto = attr.ib(default=0, order=False)
 
-    #header_value_bool = attr.ib(default={"src_addr": True, "src_port": True, "dst_addr": True, "dst_port": True}, order=False)
-
     src_network = attr.ib(default=str(), order=False)
     src_port = attr.ib(default=str(), order=False)
 
@@ -23,9 +21,9 @@ class P4CompiledMatchRule(object):
         dst_port_string = self.__port_to_P4_match(self.dst_port)
 
         return f'{hex(self.proto)} ' + \
-               self.src_network[0] + " " + \
+               str(self.src_network) + " " + \
                src_port_string + \
-               self.dst_network[0] + " " + \
+               str(self.dst_network) + " " + \
                dst_port_string + \
                f'{hex(self.flags)}&&&{hex(self.flags_mask)}'
 
