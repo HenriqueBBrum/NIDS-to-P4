@@ -1,0 +1,3 @@
+table_size_limit=1000
+target_plataform=bmv2
+target_goal=random_rules

@@ -29,13 +29,16 @@ MAX_PORT = 65535
 
 PROTO_MAPPING = {'icmp': 1, 'ip': 4, 'tcp': 6, 'udp': 17}
 
-def main(config_path, rules_path):
+def main(config_path, rules_path, compiler_goal):
     config = SnortConfiguration(snort_version=2, configuration_dir=config_path)
+    compilation_goals = parse_compiler_goal(compiler_goal)
+    
     ignored_rule_files = []
    
     print("Getting and parsing rules.....")
     print("Splitting bidirectional rules...")
     original_rules, fixed_bidirectional_rules = get_rules(rules_path, ignored_rule_files, config) # Get all rules from multiple files or just one
+
     # stats = RuleStatistics(original_rules, config)
     # stats.print_all()
     # rules_sid_rev_map = rules_to_sid_rev_map(rules)
@@ -43,11 +46,12 @@ def main(config_path, rules_path):
     print("Deduplication of rules")
     deduped_rules = dedup_rules(fixed_bidirectional_rules, config)
 
+    
     print("Adjusting rules. Replacing variables,grouping ports into ranges and adjsuting negated port rules")
     modified_rules = adjust_rules(deduped_rules, config) # Currently negated IPs are not supported
-   
 
-    print("Adjusting negated")
+    # GROUP BEFORE TRANSFORMING TO P4 MATCH?
+
     print("Converting parsed rules to P4 table match")
     ipv4_p4_rules, ipv6_p4_rules = convert_rules_to_P4_table_match(modified_rules, config)
     
@@ -58,7 +62,6 @@ def main(config_path, rules_path):
   
     #p4id_rules = sum([compile_p4id_ternary_range_size(rule) for rule in p4_rules_dedup])
 
-   
 
     reduced_ipv4_p4_rules = reduce_rules_from_deduped(deduped_ipv4_p4_rules)
     reduced_ipv6_p4_rules = reduce_rules_from_deduped(deduped_ipv6_p4_rules)
@@ -474,6 +477,6 @@ def compile_p4id_ternary_range_size(rule):
 
 
 if __name__ == '__main__':
-    main(config_path=sys.argv[1], rules_path=sys.argv[2])
+    main(config_path=sys.argv[1], rules_path=sys.argv[2], compiler_goal=sys.argv[3])
 
    

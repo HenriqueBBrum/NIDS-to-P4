@@ -39,12 +39,6 @@ compiler.registered: $(DATASET_DIR)
 compiler.emerging: $(DATASET_DIR)
 	python3 src/main/python/compiler.py ${SNORT_CONFIG} ${EMERGING_RULES_FILE}
 
-compiler.community.individual: $(DATASET_DIR)
-	python3 src/main/python/compiler_individual.py ${SNORT_CONFIG} ${COMMUNITY_RULES_FILE}
-
-compiler.registered.individual: $(DATASET_DIR)
-	python3 src/main/python/compiler_individual.py ${SNORT_CONFIG} ${REGISTERED_RULES_FILE}
-
 docker.build:
 	docker build -t p4lang/p4app:p4snort .
 
