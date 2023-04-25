@@ -44,12 +44,11 @@ def main(config_path, rules_path, compiler_goal_path, table_entries_file="src/p4
     print("*" * 80)
     print("*" * 30 + " SAVING TABLE ENTRIES " + "*" * 28+ "\n\n")
     combined_table_entries = p4_ipv4_table_entries + p4_ipv6_table_entries
+
+
     save_table_entries(combined_table_entries, table_entries_file)
    
-    #p4_rule_list_dict = [p4_rule.to_dict() for p4_rule in reduced_ipv4_p4_rules]
-
-    #print(json.dumps(p4_rule_list_dict))
-
+   
 
 def parse_compiler_goal(compiler_goal_path):
     VALID_TARGET_PLATFORMS = {"bmv2"}
@@ -142,6 +141,34 @@ def save_table_entries(table_entries, filepath):
         for table_entry in table_entries:
             file.write(table_entry.to_string()+"\n")
 
+def max_severity(p4_agg_rules, max_table_size):
+    prioritized_rules = []
+    # Compute the capacity limit
+    capacity_limit = min(max_table_size, len(p4_agg_rules))
+    # Prioritize rule based on the severity/priority
+    sorted_p4_agg_rules_by_severity = sorted(p4_agg_rules, key=lambda rule: min(rule['priority_list']))
+    # Choose maximum capacity
+    for i in range(capacity_limit):
+        prioritized_rules.append(sorted_p4_agg_rules_by_severity[i])
+    return prioritized_rules
+
+def max_rules(p4_agg_rules, max_table_size):
+    prioritized_rules = []
+    # Compute the capacity limit
+    capacity_limit = min(max_table_size, len(p4_agg_rules))
+    # Prioritize rule based on the quantity of NIDS rules
+    sorted_p4_agg_rules_by_rules_quantity = sorted(p4_agg_rules, key=lambda rule: len(rule['sid_list']), reverse=True)
+    # Choose maximum capacity
+    for i in range(capacity_limit):
+        prioritized_rules.append(sorted_p4_agg_rules_by_rules_quantity[i])
+    return prioritized_rules
+
+def random_rules(p4_agg_rules, max_table_size):
+    prioritized_rules = []
+    # Compute the capacity limit
+    capacity_limit = min(max_table_size, len(p4_agg_rules))
+    prioritized_rules = random.sample(p4_agg_rules, capacity_limit)
+    return prioritized_rules
 
 
 # def compile_p4id_ternary_range_size(rule):
