@@ -27,8 +27,7 @@ class Dicts():
         if ip_variable in ip_variables_set:
             return True
         return False
-        
-    
+         
     @staticmethod
     def port_variables(port_variable: str = None):
         port_variables_set= {
@@ -39,7 +38,6 @@ class Dicts():
         if port_variable in port_variables_set:
             return True
         return False
-
 
     @staticmethod
     def classtypes(cltype: str = None):

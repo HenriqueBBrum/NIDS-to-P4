@@ -2,9 +2,8 @@ import re
 import ipaddress
 import collections
 import shlex
-from typing import Tuple, List, Dict, Any
 
-from rule_related_classes import Rule
+from snort_rule_parser.rule_related_classes import Rule
 
 try:
     from .validation_dicts import Dicts

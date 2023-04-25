@@ -2,7 +2,7 @@ from collections import Counter
 
 class RuleStatistics:
 
-    def __init__(self, parsed_rules, config):
+    def __init__(self, config, parsed_rules):
         self.rules = parsed_rules
 
         self.protocol_stats = self.compute_protocol_stats()
