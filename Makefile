@@ -15,6 +15,7 @@ REGISTERED_RULES_FILE=target/registered
 EMERGING_RULES_FILE=target/emerging/rules
 
 SNORT_CONFIG=etc/config
+COMPILER_GOAL=etc/compiler_goal.json
 
 all: parse.csv
 
@@ -28,7 +29,7 @@ $(COMMUNITY_RULES_FILE): $(TARGET_DIR)
 	curl -L "${RULES_URL}" | tar -xz -C ${TARGET_DIR}
 
 compiler.community: $(DATASET_DIR)
-	python3 src/compiler/compiler.py ${SNORT_CONFIG} ${COMMUNITY_RULES_FILE}
+	python3 src/compiler/compiler.py ${SNORT_CONFIG} ${COMMUNITY_RULES_FILE} ${COMPILER_GOAL}
 
 compiler.community.p4id: $(DATASET_DIR)
 	python3 src/main/python/compiler_p4id.py ${SNORT_CONFIG} ${COMMUNITY_RULES_FILE}
