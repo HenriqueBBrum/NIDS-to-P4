@@ -1,16 +1,24 @@
-#ifndef __HEADER_P4__
-#define __HEADER_P4__ 1
+const bit<48> ONE_SECOND = 1000000;
+const bit<8> MAX_PACKETS = 20;
+const bit<9> PASS_PORT = 2;
+
 
 // Ethernet
 const bit<16> TYPE_IPV4 = 0x800;
+const bit<16> TYPE_IPV6 = 0x86DD;
 const bit<16> TYPE_ALERT = 0x2345;
 
-// IPv4
+// IP 
+const bit<8> TYPE_ICMP = 0x01; 
 const bit<8> TYPE_TCP = 0x06;
+const bit<8> TYPE_UDP = 0x11;
+
 
 typedef bit<9>  egressSpec_t;
 typedef bit<48> macAddr_t;
 typedef bit<32> ip4Addr_t;
+typedef bit<128> ip6Addr_t;
+
 
 
 header ethernet_t {
@@ -34,14 +42,27 @@ header ipv4_t {
     ip4Addr_t dstAddr;
 }
 
-header generic_transport_t {
-    bit<16> srcPort;
-    bit<16> dstPort;
-    bit<32> seqNo;
-    bit<32> ackNo;
-    bit<4>  dataOffset;
-    bit<4>  res;
-    bit<8>  flags;
+header ipv6_t {
+    bit<4>    version;
+    bit<8>    trafficClass;
+    bit<20>   flowLabel;
+    bit<16>   payloadLength;
+    bit<8>    nextHeader;
+    bit<8>    hopLImit;
+    ip6Addr_t srcAddr;
+    ip6Addr_t dstAddr;
+}
+
+header_union ip_t {
+  ipv4_t v4;
+  ipv6_t v6;
+}
+
+
+header icmp_t {
+    bit<8>  type;
+    bit<8>  code;
+    bit<16> checksum;
 }
 
 header udp_t {
@@ -64,23 +85,27 @@ header tcp_t {
     bit<16> urgentPtr;
 }
 
-header tcp_options_t {
-    bit<160> options;
+header_union ip_encap_protocol_t{
+    udp_t  udp;
+    tcp_t  tcp;
+    icmp_t icmp;
+}
+
+struct ingress_metadata_t {
+    bit<32> nhop_ipv4;
 }
 
 struct metadata {
-    bool redirect_to_ids;
+    bool ids_table_match;
+    bit<16> srcPort;
+    bit<16> dstPort;
+    bit<8> flags;
+    ingress_metadata_t   ingress_metadata;
 }
 
 struct headers {
     ethernet_t ethernet;
-    ipv4_t     ipv4;
-    @name("transport")
-    generic_transport_t transport;
-    @name("tcp")
-    tcp_t        tcp;
-    @name("tcp_options")
-    tcp_options_t tcp_options;
+    ip_t    ip;
+    ip_encap_protocol_t ip_encap_protocol;
 }
 
-#endif // __HEADER_P4__

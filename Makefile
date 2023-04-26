@@ -47,7 +47,7 @@ p4.run:
 	date
 	P4APP_IMAGE=p4lang/p4app:p4snort \
 	P4APP_LOGDIR="./$(TARGET_DIR)/experiments/logs" \
-	p4app run src/main/p4/p4snort
+	p4app run src/p4
 	date
 
 p4.experiments.no_constraint: $(TARGET_DIR)
