@@ -210,7 +210,7 @@ def create_table_entries(rules, table_name, output_port_param='1'):
                                        action='redirect',
                                        params=[output_port_param],
                                        priority=rule.min_priority(),
-                                       match=rule.match)
+                                       agg_match=rule)
         
         table_entries.append(table_entry)
 

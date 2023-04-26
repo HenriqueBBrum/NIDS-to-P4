@@ -4,12 +4,13 @@
 #       - rules_path: path to a single rule file or to a directory containing multiple rule files
 
 
-## Standart and 3rd-party imports
+## Standard and 3rd-party imports
 import sys
-from binascii import hexlify
-from socket import inet_aton
+# from binascii import hexlify
+# from socket import inet_aton
 from datetime import datetime
 from json import load
+import random
 
 
 ## Local imports
@@ -32,21 +33,19 @@ def main(config_path, rules_path, compiler_goal_path, table_entries_file="src/p4
     modified_rules = rule_parsing_stage(config, rules_path)
 
       
-      
     print("\n\n"+"*" * 80)
     print("*" * 80)
     print("*" * 23 + " SNORT RULES TO P4 TABLE ENTRIES STAGE " + "*" * 23+ "\n\n")
-
     p4_ipv4_table_entries, p4_ipv6_table_entries = rule_to_P4_table_entry_stage(config, modified_rules)
 
 
     print("\n\n"+"*" * 80)
     print("*" * 80)
-    print("*" * 30 + " SAVING TABLE ENTRIES " + "*" * 28+ "\n\n")
+    print("*" * 20 + " PRIORITIZING AND SAVING TABLE ENTRIES " + "*" * 21+ "\n\n")
     combined_table_entries = p4_ipv4_table_entries + p4_ipv6_table_entries
 
-
-    save_table_entries(combined_table_entries, table_entries_file)
+    prioritized_table_entries = prioritize_table_entries(compiler_goal, combined_table_entries)
+    save_table_entries(prioritized_table_entries, table_entries_file)
    
    
 
@@ -136,40 +135,44 @@ def rule_to_P4_table_entry_stage(config, modified_rules):
     return p4_ipv4_table_entries, p4_ipv6_table_entires
 
 
+
+def prioritize_table_entries(compiler_goal, table_entries): 
+    VALID_TARGET_GOALS = {"max_severity": max_severity, "max_rules": max_rules, "random_rules": random_rules}
+    max_table_size = compiler_goal["table_size_limit"]
+    try:  
+        prioritized_rules = VALID_TARGET_GOALS[compiler_goal["target_goal"]](table_entries, max_table_size)
+    except:
+        raise Exception
+
+    return prioritized_rules
+
+def max_severity(table_entries, max_table_size):
+    prioritized_rules = []
+    capacity_limit = min(len(table_entries), max_table_size)
+
+    # Prioritize rule based on the severity/priority
+    sorted_table_entries_by_severity = sorted(table_entries, key=lambda entry: entry.priority, reverse=True)
+    return sorted_table_entries_by_severity[0:capacity_limit]
+
+def max_rules(table_entries, max_table_size):
+    prioritized_rules = []
+    capacity_limit = min(len(table_entries), max_table_size)
+
+    # Prioritize rule based on the quantity of NIDS rules
+    sorted_table_entries_by_rules_quantity = sorted(table_entries, key=lambda entry: len(entry.agg_match.sid_rev_list), reverse=True)
+    return sorted_table_entries_by_rules_quantity[0:capacity_limit]
+
+def random_rules(table_entries, max_table_size):
+    prioritized_rules = []
+    capacity_limit = min(len(table_entries), max_table_size)
+    prioritized_rules = random.sample(table_entries, capacity_limit)
+    return prioritized_rules
+
+
 def save_table_entries(table_entries, filepath):
     with open(filepath, 'w') as file:
         for table_entry in table_entries:
             file.write(table_entry.to_string()+"\n")
-
-def max_severity(p4_agg_rules, max_table_size):
-    prioritized_rules = []
-    # Compute the capacity limit
-    capacity_limit = min(max_table_size, len(p4_agg_rules))
-    # Prioritize rule based on the severity/priority
-    sorted_p4_agg_rules_by_severity = sorted(p4_agg_rules, key=lambda rule: min(rule['priority_list']))
-    # Choose maximum capacity
-    for i in range(capacity_limit):
-        prioritized_rules.append(sorted_p4_agg_rules_by_severity[i])
-    return prioritized_rules
-
-def max_rules(p4_agg_rules, max_table_size):
-    prioritized_rules = []
-    # Compute the capacity limit
-    capacity_limit = min(max_table_size, len(p4_agg_rules))
-    # Prioritize rule based on the quantity of NIDS rules
-    sorted_p4_agg_rules_by_rules_quantity = sorted(p4_agg_rules, key=lambda rule: len(rule['sid_list']), reverse=True)
-    # Choose maximum capacity
-    for i in range(capacity_limit):
-        prioritized_rules.append(sorted_p4_agg_rules_by_rules_quantity[i])
-    return prioritized_rules
-
-def random_rules(p4_agg_rules, max_table_size):
-    prioritized_rules = []
-    # Compute the capacity limit
-    capacity_limit = min(max_table_size, len(p4_agg_rules))
-    prioritized_rules = random.sample(p4_agg_rules, capacity_limit)
-    return prioritized_rules
-
 
 # def compile_p4id_ternary_range_size(rule):
 #     src_size = mask_range(rule.match.src_port_start, rule.match.src_port_end)

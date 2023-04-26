@@ -53,16 +53,12 @@ class P4AggregatedMatch(object):
 
     def sids(self):
         return list(set(self.sid_rev_list))
-
-    def to_dict(self):
-        return {'match': self.match.to_string(),
-                'priority_list': self.priority_list,
-                'sid_rev_list': self.sid_rev_list}
+        
 
 @attr.s
 class P4TableEntry(object):
     table = attr.ib(default=str(), order=False)
-    match = attr.ib(default=P4Match(), order=False)
+    agg_match = attr.ib(default=P4AggregatedMatch(), order=False)
     action = attr.ib(default=str(), order=False)
     params = attr.ib(default=[], order=False)
     priority = attr.ib(default=str(), order=False)
@@ -70,5 +66,5 @@ class P4TableEntry(object):
     def to_string(self):
         params = self.params if self.params and type(self.params) == list else []
         parsed_params = " ".join(params)
-        return f'table_add {self.table} {self.action} {self.match.to_string()} => {parsed_params} {self.priority}'
+        return f'table_add {self.table} {self.action} {self.agg_match.match.to_string()} => {parsed_params} {self.priority}'
 

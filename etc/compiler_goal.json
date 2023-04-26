@@ -1,5 +1,5 @@
 {
-    "table_size_limit": 4000,
+    "table_size_limit": 10000,
     "target_platform": "bmv2",
-    "target_goal": "max_severity"
+    "target_goal": "random_rules"
 }
