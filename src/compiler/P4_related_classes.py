@@ -7,9 +7,15 @@ class P4Match(object):
     proto = attr.ib(default=0, order=False)
 
     src_network = attr.ib(default=str(), order=False)
+    src_addr = attr.ib(default=str(), order=False)
+    src_addr_mask = attr.ib(default=str(), order=False)
+
     src_port = attr.ib(default=str(), order=False)
 
     dst_network = attr.ib(default=str(), order=False)
+    dst_addr = attr.ib(default=str(), order=False)
+    dst_addr_mask = attr.ib(default=str(), order=False)
+
     dst_port = attr.ib(default=str(), order=False)
 
     flags = attr.ib(default=0xff, order=False)
@@ -20,9 +26,9 @@ class P4Match(object):
         dst_port_string = self.__port_to_P4_match(self.dst_port)
 
         return f'{hex(self.proto)} ' + \
-               str(self.src_network) + " " + \
+               f'0x{self.src_addr.decode("utf-8")}&&&0x{self.src_addr_mask.decode("utf-8")} ' + \
                src_port_string + \
-               str(self.dst_network) + " " + \
+               f'0x{self.dst_addr.decode("utf-8")}&&&0x{self.dst_addr_mask.decode("utf-8")} ' + \
                dst_port_string + \
                f'{hex(self.flags)}&&&{hex(self.flags_mask)}'
 

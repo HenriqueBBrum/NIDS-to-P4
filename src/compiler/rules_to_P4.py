@@ -1,4 +1,6 @@
-from ipaddress import ip_network, ip_address, IPv4Network
+from ipaddress import ip_network, ip_address, IPv4Address
+import binascii
+import socket
 
 
 from P4_related_classes import *
@@ -13,6 +15,7 @@ def rules_to_P4_table_match(grouped_rules, config):
 
         ipv4_P4_rules.extend(ipv4_rules)
         ipv6_P4_rules.extend(ivp6_rules)
+
     return ipv4_P4_rules, ipv6_P4_rules
 
 def _rule_to_P4_table_match(grouped_rule):
@@ -28,52 +31,69 @@ def _rule_to_P4_table_match(grouped_rule):
 
     ipv4_flat_P4_rules, ipv6_flat_P4_rules = [], []
     for src_ip in src_ip_list:
-        for src_port in src_port_list:
-            for dst_ip in dst_ip_list:
-                src_network = _convert_address_to_network(src_ip[0])
-                dst_network= _convert_address_to_network(dst_ip[0])
-
-                if type(src_network) != type(dst_network):
+        for dst_ip in dst_ip_list:
+            if _ip_type(src_ip[0]) != _ip_type(dst_ip[0]):
                     print("IPs in different version")
                     continue
                 
+            for src_port in src_port_list:
                 for dst_port in dst_port_list:
-                    P4_rule_match = _create_P4_table_match(proto, src_network, src_port[0], dst_network, dst_port[0], grouped_rule.flags)
+                    P4_rule_match = _create_P4_table_match(proto, src_ip[0], src_port[0], dst_ip[0], dst_port[0], grouped_rule.flags)
                     P4_rule = P4AggregatedMatch(P4_rule_match, grouped_rule.priority_list, grouped_rule.sid_rev_list)
 
-                    if isinstance(ip_network(src_network), IPv4Network):
+                    if _ip_type(src_ip[0]) == IPv4Address:
                         ipv4_flat_P4_rules.append(P4_rule)
                     else:
                         ipv6_flat_P4_rules.append(P4_rule)
 
+
     return ipv4_flat_P4_rules, ipv6_flat_P4_rules
 
-def _convert_address_to_network(ip):
-    if "/" not in ip:
-        if ":" in ip:
-            ip += "/128"
-        else:
-            ip += "/32"
 
-    return ip_network(ip)
+def _ip_type(ip):
+    no_network = ip.split("/")[0]
+    return type(ip_address(no_network))
+
 
 # Converts Snort rule header values to P4 table entries
-def _create_P4_table_match(proto, src_network, src_port, dst_network, dst_port, flags):
+def _create_P4_table_match(proto, src_ip, src_port, dst_ip, dst_port, flags):
     flags, flags_mask = _convert_flags_to_ternary(flags)
 
     p4_match_rule = P4Match()
     p4_match_rule.proto = PROTO_MAPPING.get(proto, None)
 
-    p4_match_rule.src_network = src_network
+    p4_match_rule.src_network, p4_match_rule.src_addr, p4_match_rule.src_addr_mask = convert_ip_network_to_hex(src_ip)
     p4_match_rule.src_port = src_port
 
-    p4_match_rule.dst_network = dst_network
+    p4_match_rule.dst_network, p4_match_rule.dst_addr, p4_match_rule.dst_addr_mask = convert_ip_network_to_hex(dst_ip)
     p4_match_rule.dst_port= dst_port
 
     p4_match_rule.flags = flags
     p4_match_rule.flags_mask = flags_mask
 
     return p4_match_rule
+
+
+def convert_ip_network_to_hex(_ip_network):
+    if _ip_type(_ip_network) == IPv4Address:
+        if "/" not in _ip_network:
+            _ip_network += "/32"
+        IP_type = socket.AF_INET
+    else:
+        if "/" not in _ip_network:
+            _ip_network += "/128"
+        IP_type = socket.AF_INET6
+
+    network = ip_network(_ip_network, False)
+
+    try:
+        ip = binascii.hexlify(socket.inet_pton(IP_type, str(network.network_address))).upper()
+        mask = binascii.hexlify(socket.inet_pton(IP_type, str(network.netmask))).upper()
+        return (network, ip, mask)
+    except Exception as e:
+        print("Error on ip network {}: {}".format(ip_network, e))
+
+    return convert_ip_network_to_hex('255.255.255.255')
 
 
 # Not supported
@@ -177,6 +197,10 @@ def _is_rule_within(rule1, rule2):
     r2_dst_port_start, r2_dst_port_end = _get_port_range_start_end(r2_match.dst_port)
 
     if not (r1_dst_port_start >=r2_dst_port_start and r1_dst_port_end <= r2_dst_port_end):
+        return False
+
+
+    if type(r1_match.src_network) != type(r2_match.src_network) or type(r1_match.dst_network) != type(r2_match.dst_network):
         return False
 
     if not r1_match.src_network.subnet_of(r2_match.src_network):

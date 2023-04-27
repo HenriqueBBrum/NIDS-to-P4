@@ -71,9 +71,9 @@ control MyIngress(inout headers hdr, inout metadata meta, inout standard_metadat
         }
         key = {
            hdr.ip.v4.protocol: exact;
-           hdr.ip.v4.srcAddr: lpm;
+           hdr.ip.v4.srcAddr: ternary;
            meta.srcPort: range;
-           hdr.ip.v4.dstAddr: lpm;
+           hdr.ip.v4.dstAddr: ternary;
            meta.dstPort: range;
            meta.flags: ternary;
         }
@@ -91,9 +91,9 @@ control MyIngress(inout headers hdr, inout metadata meta, inout standard_metadat
         }
         key = {
            hdr.ip.v6.nextHeader: exact;
-           hdr.ip.v6.srcAddr: lpm;
+           hdr.ip.v6.srcAddr: ternary;
            meta.srcPort: range;
-           hdr.ip.v6.dstAddr: lpm;
+           hdr.ip.v6.dstAddr: ternary;
            meta.dstPort: range;
            meta.flags: ternary;
         }
