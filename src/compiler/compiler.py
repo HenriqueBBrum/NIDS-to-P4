@@ -32,7 +32,6 @@ def main(config_path, rules_path, compiler_goal_path, table_entries_file="src/p4
     print("*" * 26 + " SNORT RULES PARSING STAGE " + "*" * 27+ "\n\n")
     modified_rules = rule_parsing_stage(config, rules_path)
 
-      
     print("\n\n"+"*" * 80)
     print("*" * 80)
     print("*" * 23 + " SNORT RULES TO P4 TABLE ENTRIES STAGE " + "*" * 23+ "\n\n")
@@ -79,6 +78,9 @@ def rule_parsing_stage(config, rules_path):
     
     print("---- Deduplication of rules..... ----")
     deduped_rules = dedup_rules(config, fixed_bidirectional_rules)
+
+    
+      
 
     print("---- Adjusting rules. Replacing variables,grouping ports into ranges and adjusting negated port rules..... ----")
     modified_rules = adjust_rules(config, deduped_rules) # Currently negated IPs are not supported
@@ -147,7 +149,6 @@ def prioritize_table_entries(compiler_goal, table_entries):
     return prioritized_rules
 
 def max_severity(table_entries, max_table_size):
-    prioritized_rules = []
     capacity_limit = min(len(table_entries), max_table_size)
 
     # Prioritize rule based on the severity/priority
@@ -155,7 +156,6 @@ def max_severity(table_entries, max_table_size):
     return sorted_table_entries_by_severity[0:capacity_limit]
 
 def max_rules(table_entries, max_table_size):
-    prioritized_rules = []
     capacity_limit = min(len(table_entries), max_table_size)
 
     # Prioritize rule based on the quantity of NIDS rules

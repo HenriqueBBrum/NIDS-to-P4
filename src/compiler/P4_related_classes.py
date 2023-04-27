@@ -36,7 +36,7 @@ class P4Match(object):
     def __port_to_P4_match(port):
         port_to_string = ""
         if(isinstance(port, range)):
-            port_to_string = f'{port.start}->{port.stop} '
+            port_to_string = f'{port.start}->{port.stop-1} '
         else:
             port_to_string = f'{port}->{port} '
 

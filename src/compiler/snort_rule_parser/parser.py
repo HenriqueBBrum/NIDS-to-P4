@@ -148,20 +148,22 @@ class Parser(object):
         if _list.startswith("!"):
             list_deny = False
             _list = _list.lstrip("!")
+        
         _list = re.sub(r'^\[|\]$', '', _list)
         _list = re.sub(r'"', '', _list)
 
         return_list = []
         if re.search(r"(\[.*\])", _list): # If there is(are) a sub-list(s) process it(them)
-            nested_lists = re.split(r",(!?\[.*\])", _list)
+            _list = re.sub(r',', '', _list)
+            nested_lists = re.split(r"(!?\[.*\])", _list)
             nested_lists = filter(None, nested_lists)
-            for _lists in nested_lists: 
-                if re.match(r"^\[|^!\[", _lists): # If there are more sub-lists in lower levels process them # match is just the first one 
-                    flattened_lists = self.__flatten_list(_lists, self.__parse_ip)
+            for sublist in nested_lists: 
+                if re.match(r"^\[|^!\[", sublist): # If there are more sub-lists in lower levels process them # match is just the first one 
+                    flattened_lists = self.__flatten_list(sublist, self.__parse_ip)
                     for value, bool_ in flattened_lists:
                         return_list.append((value, bool(~(bool_ ^ list_deny)+2)))
                 else:
-                    for element in _lists.split(","):
+                    for element in sublist.split(","):
                         return_list.append(individual_parser(element, list_deny))
         else:
             for element in _list.split(","):
@@ -227,7 +229,7 @@ class Parser(object):
                 return(range(self.MIN_PORT, int(range_[1])+1), bool(~(local_bool ^ parent_bool)+2))
             
             lower_bound = int(range_[0]) if int(range_[0]) > self.MIN_PORT else self.MIN_PORT
-            upper_bound = int(range_[1]) if int(range_[1]) > self.MIN_PORT else self.MIN_PORT
+            upper_bound = int(range_[1]) if int(range_[1]) < self.MAX_PORT else self.MAX_PORT
             return (range(lower_bound, upper_bound+1), bool(~(local_bool ^ parent_bool)+2))
         
         return (port, bool(~(local_bool ^ parent_bool)+2))
@@ -270,7 +272,8 @@ class Parser(object):
             for index, option_string in enumerate(options_list):
                 if ':' in option_string:
                     key, value = option_string.split(":", 1)
-                    value = shlex.split(value, ",")
+                    if key != "pcre":
+                        value = value.split(",")
 
                     if self.dicts.payload_detection(key) and key in options_dict:
                         options_dict[key].append((str(index), value))

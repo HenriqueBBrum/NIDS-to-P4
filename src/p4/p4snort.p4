@@ -58,7 +58,7 @@ control MyIngress(inout headers hdr, inout metadata meta, inout standard_metadat
         standard_metadata.egress_spec = port;
     }
 
-    action redirect(bit<9> port, bit<2> severity) {
+    action redirect(bit<9> port) {
         meta.ids_table_match = true;
         standard_metadata.egress_spec = port;
     }
@@ -102,21 +102,8 @@ control MyIngress(inout headers hdr, inout metadata meta, inout standard_metadat
         counters = ipv6_ids_table_hit_counter;
     }
 
-    table debug_table {
-        key = {
-            hdr.ip.v4.srcAddr: exact;
-            hdr.ip.v4.dstAddr: exact;
-            meta.srcPort: exact;
-            meta.dstPort: exact;
-            hdr.ip.v4.protocol: exact;
-        }
-        actions = {
-        }
-    }
-
     /**** Independent actions ****/
-
-      
+    
     action increment_cm_limiter(bit<128> src_ip, bit<128> dst_ip, bit<16> src_port, bit<16> dst_port, bit<8> protocol) {
         bit<8> flow_hash1;
         bit<8> flow_hash2;
@@ -252,7 +239,6 @@ control MyIngress(inout headers hdr, inout metadata meta, inout standard_metadat
             }else if(current_min < MAX_PACKETS){ // Already ids listed to be forwarded
                 forward_to_ids = true;
             }else if(current_min >= MAX_PACKETS){
-                debug_table.apply();
                 log_msg("Limit reached");
                 forward_to_ids = false;
             }
@@ -276,8 +262,10 @@ control MyIngress(inout headers hdr, inout metadata meta, inout standard_metadat
 }
 
 
-control MyEgress(inout headers hdr, inout metadata meta, inout standard_metadata_t standard_metadata){
-    apply{}
+control MyEgress(inout headers hdr, inout metadata meta, inout standard_metadata_t standard_metadata){ 
+    apply {
+        
+    }
 }
 
 

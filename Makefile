@@ -1,5 +1,5 @@
 
-RULES_URL=https://www.snort.org/downloads/community/snort3-community-rules.tar.gz
+# RULES_URL=https://www.snort.org/downloads/community/snort3-community-rules.tar.gz
 
 TARGET_DIR=target
 DATASET_DIR=dataset
@@ -10,14 +10,14 @@ COMMUNITY_OUTPUT_FILE=${DATASET_DIR}/comunnity-rules.csv
 REGISTERED_RULES_FILE=${TARGET_DIR}/rules
 REGISTERED_OUTPUT_FILE=${DATASET_DIR}/registered-rules.csv
 
-COMMUNITY_RULES_FILE=etc/rules/snort3-community.rules
+SNORT_COMMUNITY_RULES=etc/rules/snort-community
+SNORT2_EMERGING_RULES_FILE=etc/rules/snort2-emerging/emerging-all.rules
+
 REGISTERED_RULES_FILE=target/registered
-EMERGING_RULES_FILE=target/emerging/rules
 
 SNORT_CONFIG=etc/config
 COMPILER_GOAL=etc/compiler_goal.json
 
-all: parse.csv
 
 $(TARGET_DIR):
 	mkdir -p ${TARGET_DIR}
@@ -25,20 +25,23 @@ $(TARGET_DIR):
 $(DATASET_DIR):
 	mkdir -p ${DATASET_DIR}
 
-$(COMMUNITY_RULES_FILE): $(TARGET_DIR)
-	curl -L "${RULES_URL}" | tar -xz -C ${TARGET_DIR}
+# $(COMMUNITY_RULES_FILE): $(TARGET_DIR)
+# 	curl -L "${RULES_URL}" | tar -xz -C ${TARGET_DIR}
 
 compiler.community: $(DATASET_DIR)
-	python3 src/compiler/compiler.py ${SNORT_CONFIG} ${COMMUNITY_RULES_FILE} ${COMPILER_GOAL}
+	python3 src/compiler/compiler.py ${SNORT_CONFIG} ${SNORT_COMMUNITY_RULES} ${COMPILER_GOAL}
 
 compiler.community.p4id: $(DATASET_DIR)
 	python3 src/main/python/compiler_p4id.py ${SNORT_CONFIG} ${COMMUNITY_RULES_FILE}
 
 compiler.registered: $(DATASET_DIR)
-	python3 src/main/python/compiler.py ${SNORT_CONFIG} ${REGISTERED_RULES_FILE}
+	python3 src/compiler/compiler.py ${SNORT_CONFIG} ${SNORT_COMMUNITY_RULES} ${COMPILER_GOAL}
 
 compiler.emerging: $(DATASET_DIR)
-	python3 src/main/python/compiler.py ${SNORT_CONFIG} ${EMERGING_RULES_FILE}
+	python3 src/compiler/compiler.py ${SNORT_CONFIG} ${SNORT2_EMERGING_RULES_FILE} ${COMPILER_GOAL}
+
+
+	
 
 docker.build:
 	docker build -t p4lang/p4app:p4snort .

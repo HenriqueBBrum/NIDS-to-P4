@@ -20,12 +20,13 @@
       },
       "hosts": {
         "h3": {
-          "cmd": "tcpreplay --stats=10 -l1 -p1000 -i $generator_interface_name /pcaps/$pcap_file; ifconfig; sleep 10; killall cpulimit; sleep 5",
+          "cmd": "ls /",
           "startup_sleep": 5,
           "wait": true
         },
         "h1": {
-          "cmd": "cpulimit -l 50 -s SIGQUIT -m -- snort -A console -c /etc/snort/snort.conf -i $snort_interface_name 2>&1"
+          "cmd": "snort -A console -c /etc/snort/snort.conf -i $snort_interface_name 2>&1",
+          "wait": true
         }
       },
       "parameters": {

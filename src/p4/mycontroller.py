@@ -6,9 +6,10 @@ class CustomAppController(AppController):
         AppController.__init__(self, *args, **kwargs)
 
     def start(self):
-        print "Calling the default controller to populate table entries"
+        print("Calling the default controller to populate table entries")
         AppController.start(self)
 
+        print("testing")
         # Set hosts interfaces MTU to 9000
         for host_name in self.topo._host_links:
             h = self.net.get(host_name)
@@ -33,6 +34,7 @@ class CustomAppController(AppController):
             h.cmd('cgcreate -g cpu:/lesscpulimited')
             h.cmd('cgset -r cpu.shares=512 cpulimited')
 
+
     def cmd_to_int(self, cmd):
         response = self.sendCommands([cmd])
         return int(response[0]['raw'])
@@ -41,7 +43,7 @@ class CustomAppController(AppController):
         response = self.sendCommands([cmd])
         return response[0]['raw'].replace('\n', '')
 
-    def to_counter_value(self, counter_response):
+    def to_counter_value(self, counter_response):  
         counter_value = counter_response.split('= ')[1]
         packets = int(counter_value.split('=')[1].split(',')[0])
         bytes = int(counter_value.split('=')[2].split(')')[0])
@@ -62,10 +64,10 @@ class CustomAppController(AppController):
         for rule in match_statistics.keys():
             print("Rule {}: {} packets".format(rule, match_statistics[rule]))
         '''
-        received_pkt, received_bytes = self.to_counter_value(self.cmd_to_string('counter_read ingress.received 3'))
-        redirected_normal_pkt, redirected_normal_bytes = self.to_counter_value(self.cmd_to_string('counter_read ingress.redirected 2'))
-        redirected_ids_pkt, redirected_ids_bytes = self.to_counter_value(self.cmd_to_string('counter_read ingress.redirected 1'))
-        ids_flow_pkt, ids_flow_bytes = self.to_counter_value(self.cmd_to_string('counter_read ingress.ids_flow 1'))
+        received_pkt, received_bytes = self.to_counter_value(self.cmd_to_string('counter_read MyIngress.received 3'))
+        redirected_normal_pkt, redirected_normal_bytes = self.to_counter_value(self.cmd_to_string('counter_read MyIngress.redirected 2')) # 2 is the port for nomral packets
+        redirected_ids_pkt, redirected_ids_bytes = self.to_counter_value(self.cmd_to_string('counter_read MyIngress.redirected 1')) # is the port for redirected packet
+        ids_flow_pkt, ids_flow_bytes = self.to_counter_value(self.cmd_to_string('counter_read MyIngress.ids_flow 1'))
 
         print("Experiment results\n")
         print('Received: {} packets - {} bytes'.format(received_pkt, received_bytes))
