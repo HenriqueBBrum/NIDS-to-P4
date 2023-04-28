@@ -6,8 +6,6 @@
 
 ## Standard and 3rd-party imports
 import sys
-# from binascii import hexlify
-# from socket import inet_aton
 from datetime import datetime
 from json import load
 import random
@@ -17,10 +15,10 @@ import random
 from snort_config_parser import SnortConfiguration
 from snort_rule_parser.rules_parser import get_rules, dedup_rules, adjust_rules
 from snort_rule_parser.rule_statistics import RuleStatistics
-from rules_to_P4 import rules_to_P4_table_match, dedup_table_matches, reduce_table_matches , create_table_entries 
+from rules_to_P4 import rules_to_P4_table_match, dedup_table_matches, reduce_table_matches, create_table_entries 
 
-# from utils import convert_ip_network_to_hex
 # from port_mask import mask_range
+
 
 
 def main(config_path, rules_path, compiler_goal, eval_output_folder, table_entries_file="src/p4/p4snort.config"):
@@ -50,7 +48,6 @@ def main(config_path, rules_path, compiler_goal, eval_output_folder, table_entri
 
 def parse_compiler_goal(compiler_goal_path):
     VALID_TARGET_PLATFORMS = {"bmv2"}
-    VALID_TARGET_GOALS = {"max_severity", "max_rules", "random_rules"}
 
     with open(compiler_goal_path, 'r') as compiler_goal_file:
         compiler_goal = load(compiler_goal_file)
