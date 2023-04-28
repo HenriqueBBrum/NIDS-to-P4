@@ -716,3 +716,5 @@ class Dicts():
             return "content_modifier", option
         if option in post_detect:
             return "post_detect", option
+        
+        return "", []

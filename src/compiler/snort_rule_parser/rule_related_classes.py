@@ -20,7 +20,7 @@ class Rule(object):
 
         flags = self.options.get("flags", [])
         if flags:
-            flags = flags[0][1][0]
+            flags = flags[1][0]
 
         return id+str(flags)
     

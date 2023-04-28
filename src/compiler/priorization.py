@@ -2,35 +2,6 @@
 import random
 import itertools
 
-def max_severity(p4_agg_rules, max_table_size):
-    prioritized_rules = []
-    # Compute the capacity limit
-    capacity_limit = min(max_table_size, len(p4_agg_rules))
-    # Prioritize rule based on the severity/priority
-    sorted_p4_agg_rules_by_severity = sorted(p4_agg_rules, key=lambda rule: min(rule['priority_list']))
-    # Choose maximum capacity
-    for i in range(capacity_limit):
-        prioritized_rules.append(sorted_p4_agg_rules_by_severity[i])
-    return prioritized_rules
-
-def max_rules(p4_agg_rules, max_table_size):
-    prioritized_rules = []
-    # Compute the capacity limit
-    capacity_limit = min(max_table_size, len(p4_agg_rules))
-    # Prioritize rule based on the quantity of NIDS rules
-    sorted_p4_agg_rules_by_rules_quantity = sorted(p4_agg_rules, key=lambda rule: len(rule['sid_list']), reverse=True)
-    # Choose maximum capacity
-    for i in range(capacity_limit):
-        prioritized_rules.append(sorted_p4_agg_rules_by_rules_quantity[i])
-    return prioritized_rules
-
-def random_rules(p4_agg_rules, max_table_size):
-    prioritized_rules = []
-    # Compute the capacity limit
-    capacity_limit = min(max_table_size, len(p4_agg_rules))
-    prioritized_rules = random.sample(p4_agg_rules, capacity_limit)
-    return prioritized_rules
-
 def max_total_rules(p4_agg_rules, max_table_size):
     #combinations = list()
     i = 0

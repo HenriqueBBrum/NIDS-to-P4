@@ -77,10 +77,10 @@ class Parser(object):
         
         header_dict["action"] = self.__action(header[0])
         header_dict["proto"] = self.__proto(header[1])
-        header_dict["source"] = self.__ip(header[2])
+        header_dict["src_ip"] = self.__ip(header[2])
         header_dict["src_port"] = self.__port(header[3])
         header_dict["direction"] = self.__direction(header[4])
-        header_dict["destination"] = self.__ip(header[5])
+        header_dict["dst_ip"] = self.__ip(header[5])
         header_dict["dst_port"] = self.__port(header[6])
 
         return header_dict
@@ -270,22 +270,22 @@ class Parser(object):
             options_list = self.__get_options(rule)
             options_dict = collections.OrderedDict()
             for index, option_string in enumerate(options_list):
+                key = option_string
+                value = ""
                 if ':' in option_string:
                     key, value = option_string.split(":", 1)
-                    if key != "pcre":
-                        value = value.split(",")
+                    
+                if key != "pcre":
+                    value = value.split(",")
 
-                    if self.dicts.payload_detection(key) and key in options_dict:
+                if self.dicts.payload_detection(key): 
+                    if key in options_dict:
                         options_dict[key].append((str(index), value))
-                        continue
+                    else:
+                        options_dict[key] = [(str(index), value)]
+                    continue
 
-                    options_dict[key] = [(str(index), value)]
-                else:
-                    if self.dicts.payload_detection(option_string) and option_string in options_dict:
-                        options_dict[option_string].append((str(index), ""))
-                        continue
-
-                    options_dict[option_string] = [(str(index), "")]
+                options_dict[key] = (str(index), value)
 
             self.__validate_options(options_dict)
             return options_dict
@@ -315,23 +315,21 @@ class Parser(object):
     # Verifies if the option key is valid or if the classtype option has a valid value
     def __validate_options(self, options):
         for key, data in options.items():
-            for index, value in data:                
-                # if len(value) == 1:
-                #     content_mod = self.dicts.content_modifiers(value[0])
-                #     opt = False
-                #     if content_mod:
-                #         # An unfinished feature
-                #         continue
+            if self.dicts.payload_detection(key):
+                for index, value in data:                
+                    valid_option = self.dicts.verify_option(key)
+                    if not valid_option:
+                        raise ValueError("Unrecognized option: %s" % key)
 
+            else:
                 valid_option = self.dicts.verify_option(key)
                 if not valid_option:
                     raise ValueError("Unrecognized option: %s" % key)
                 
                 if key=="classtype":
-                    if len(value)>1:
-                        raise Exception("Multiple rule classification %s" % value)
-                    classification = self.dicts.classtypes(value[0])
+                    classification = self.dicts.classtypes(data[1][0]) # {"classtype : (index, [value])"}
                     if not classification:
                         raise ValueError("Unrecognized rule classification: %s" % value)
+                
 
         return options

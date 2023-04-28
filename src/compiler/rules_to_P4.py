@@ -20,9 +20,9 @@ def rules_to_P4_table_match(grouped_rules, config):
 
 def _rule_to_P4_table_match(grouped_rule):
     proto = grouped_rule.header.get('proto')
-    src_ip_list = grouped_rule.header.get('source')
+    src_ip_list = grouped_rule.header.get('src_ip')
     src_port_list = grouped_rule.header.get('src_port')
-    dst_ip_list = grouped_rule.header.get('destination')
+    dst_ip_list = grouped_rule.header.get('dst_ip')
     dst_port_list = grouped_rule.header.get('dst_port')
 
     if proto not in PROTO_MAPPING:
