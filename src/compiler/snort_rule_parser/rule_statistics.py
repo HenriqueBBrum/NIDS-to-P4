@@ -25,8 +25,10 @@ class RuleStatistics:
         return Counter(result)
     
     def compute_src_stats(self):
-        print(str(list(self.rules[0].header.get('source').keys())))
-        result = [str(list(rule.header.get('source').keys())) for rule in self.rules]
+        for rule in self.rules
+            for src_ip in rule.header.get("source"):
+                result.append(src_ip)
+                
         return Counter(result)
 
     def compute_dst_stats(self):

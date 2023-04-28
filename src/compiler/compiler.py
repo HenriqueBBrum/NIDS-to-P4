@@ -68,13 +68,13 @@ def parse_compiler_goal(compiler_goal_path):
 
 
 def rule_parsing_stage(config, rules_path):
-    ignored_rule_files = []
+    ignored_rule_files = {"snort2-community.rules"}
 
     print("---- Getting and parsing rules..... ----")
     print("---- Splitting bidirectional rules..... ----")
     original_rules, fixed_bidirectional_rules = get_rules(rules_path, ignored_rule_files) # Get all rules from multiple files or just one
-    # stats = RuleStatistics(config, original_rules)
-    # stats.print_all()
+    stats = RuleStatistics(config, original_rules)
+    stats.print_all()
     
     print("---- Deduplication of rules..... ----")
     deduped_rules = dedup_rules(config, fixed_bidirectional_rules)
