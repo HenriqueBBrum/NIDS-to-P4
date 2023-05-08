@@ -6,8 +6,6 @@
 
 ## Standard and 3rd-party imports
 import sys
-# from binascii import hexlify
-# from socket import inet_aton
 from datetime import datetime
 from json import load
 import random
@@ -17,14 +15,14 @@ import random
 from snort_config_parser import SnortConfiguration
 from snort_rule_parser.rules_parser import get_rules, dedup_rules, adjust_rules
 from snort_rule_parser.rule_statistics import RuleStatistics
-from rules_to_P4 import rules_to_P4_table_match, dedup_table_matches, reduce_table_matches , create_table_entries 
+from rules_to_P4 import rules_to_P4_table_match, dedup_table_matches, reduce_table_matches, create_table_entries 
 
-# from utils import convert_ip_network_to_hex
 # from port_mask import mask_range
 
 
-def main(config_path, rules_path, compiler_goal_path, table_entries_file="src/p4/p4snort.config"):
-    compiler_goal = parse_compiler_goal(compiler_goal_path)
+
+def main(config_path, rules_path, compiler_goal, eval_output_folder, table_entries_file="src/p4/p4snort.config"):
+    compiler_goal = parse_compiler_goal(compiler_goal)
     config = SnortConfiguration(snort_version=2, configuration_dir=config_path)
 
     print("*" * 80)
@@ -50,7 +48,6 @@ def main(config_path, rules_path, compiler_goal_path, table_entries_file="src/p4
 
 def parse_compiler_goal(compiler_goal_path):
     VALID_TARGET_PLATFORMS = {"bmv2"}
-    VALID_TARGET_GOALS = {"max_severity", "max_rules", "random_rules"}
 
     with open(compiler_goal_path, 'r') as compiler_goal_file:
         compiler_goal = load(compiler_goal_file)
@@ -80,6 +77,8 @@ def rule_parsing_stage(config, rules_path):
     print("---- Deduplication of rules..... ----")
     deduped_rules = dedup_rules(config, fixed_bidirectional_rules)
    
+
+
     print("---- Adjusting rules. Replacing variables,grouping ports into ranges and adjusting negated port rules..... ----")
     modified_rules = adjust_rules(config, deduped_rules) # Currently negated IPs are not supported
 
@@ -189,6 +188,13 @@ def save_table_entries(table_entries, filepath):
 
 
 if __name__ == '__main__':
-    main(config_path=sys.argv[1], rules_path=sys.argv[2], compiler_goal_path=sys.argv[3])
+    config_path = sys.argv[1]
+    rules_path = sys.argv[2]
+    compiler_goal = sys.argv[3]
+    eval_output_folder = ""
+    if len(sys.argv) > 4:
+        eval_output_folder = sys.argv[4]
+    
+    main(config_path, rules_path, compiler_goal, eval_output_folder)
 
    

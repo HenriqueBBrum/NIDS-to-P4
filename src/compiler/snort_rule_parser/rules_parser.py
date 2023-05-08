@@ -86,10 +86,10 @@ def dedup_rules(config, p4_rules):
 
     return list(deduped_rules.values())
 
-# Returns value of key in rule options. Option value format: [(option_index, [option_index_values, ...]), ...]
+# Returns value of key in rule options. Option value format: (option_index, [option_index_values])
 def _get_simple_option_value(key, options, default="ERROR"):
     try:
-        return options[key][0][1][0]
+        return options[key][1][0]
     except Exception as e:
         #print("Error when searching for key {} in rule options \n Returning: {}".format(key, default))
         return default

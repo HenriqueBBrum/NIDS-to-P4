@@ -1,47 +1,34 @@
-
-# RULES_URL=https://www.snort.org/downloads/community/snort3-community-rules.tar.gz
-
 TARGET_DIR=target
 DATASET_DIR=dataset
 
-COMMUNITY_OUTPUT_FILE=${DATASET_DIR}/comunnity-rules.csv
-
-# Improve registered download
-REGISTERED_RULES_FILE=${TARGET_DIR}/rules
-REGISTERED_OUTPUT_FILE=${DATASET_DIR}/registered-rules.csv
+COMPILER_EXPERIMENTS_DIR=experiments/rule_compiler_evaluation
+DATA_PLANE_EXPERIMENTS_DIR=experiments/data_plane_evaluation
 
 SNORT_COMMUNITY_RULES=etc/rules/snort-community
-SNORT2_EMERGING_RULES_FILE=etc/rules/snort2-emerging/emerging-all.rules
-
-REGISTERED_RULES_FILE=target/registered
+SNORT2_EMERGING_RULES=etc/rules/snort2-emerging
+REGISTERED_RULES=etc/rules/registered
 
 SNORT_CONFIG=etc/config
 COMPILER_GOAL=etc/compiler_goal.json
 
+ifndef EVAL_RULE
+EVAL_RULE = $(SNORT_COMMUNITY_RULES)
+endif
 
-$(TARGET_DIR):
-	mkdir -p ${TARGET_DIR}
+build:
+	mkdir -p ${TARGET_DIR} ${DATASET_DIR} ${COMPILER_EXPERIMENTS_DIR} ${DATA_PLANE_EXPERIMENTS_DIR}
 
-$(DATASET_DIR):
-	mkdir -p ${DATASET_DIR}
-
-# $(COMMUNITY_RULES_FILE): $(TARGET_DIR)
-# 	curl -L "${RULES_URL}" | tar -xz -C ${TARGET_DIR}
-
-compiler.community: $(DATASET_DIR)
+compiler.community: 
 	python3 src/compiler/compiler.py ${SNORT_CONFIG} ${SNORT_COMMUNITY_RULES} ${COMPILER_GOAL}
 
-compiler.community.p4id: $(DATASET_DIR)
-	python3 src/main/python/compiler_p4id.py ${SNORT_CONFIG} ${COMMUNITY_RULES_FILE}
+compiler.registered:
+	python3 src/compiler/compiler.py ${SNORT_CONFIG} ${REGISTERED_RULES} ${COMPILER_GOAL}
 
-compiler.registered: $(DATASET_DIR)
-	python3 src/compiler/compiler.py ${SNORT_CONFIG} ${SNORT_COMMUNITY_RULES} ${COMPILER_GOAL}
+compiler.emerging: 
+	python3 src/compiler/compiler.py ${SNORT_CONFIG} ${SNORT2_EMERGING_RULES} ${COMPILER_GOAL}
 
-compiler.emerging: $(DATASET_DIR)
-	python3 src/compiler/compiler.py ${SNORT_CONFIG} ${SNORT2_EMERGING_RULES_FILE} ${COMPILER_GOAL}
-
-
-	
+compiler.eval:
+	python3 src/compiler/compiler.py ${SNORT_CONFIG} ${EVAL_RULE} ${COMPILER_GOAL} ${COMPILER_EXPERIMENTS_DIR}
 
 docker.build:
 	docker build -t p4lang/p4app:p4snort .
