@@ -45,19 +45,20 @@ class P4Match(object):
 @attr.s
 class P4AggregatedMatch(object):
     match = attr.ib(default=P4Match(), order=False)
-    priority_list = attr.ib(default=[], order=False)
+    priority_list = attr.ib(default=[], order=False) # SNORT PRIORITY: SMALLER NUMBERS HIGHER PRIORIRTY
     sid_rev_list = attr.ib(default=[], order=False)
 
-    def rules_count(self):
+    def match_count(self):
         return len(self.priority_list)
 
+    # Smaller numbers indicate higher severity
     def min_priority(self):
         return min(self.priority_list)
 
     def max_priority(self):
         return max(self.priority_list)
 
-    def sids(self):
+    def sid_rev(self):
         return list(set(self.sid_rev_list))
         
 
@@ -67,7 +68,7 @@ class P4TableEntry(object):
     agg_match = attr.ib(default=P4AggregatedMatch(), order=False)
     action = attr.ib(default=str(), order=False)
     params = attr.ib(default=[], order=False)
-    priority = attr.ib(default=str(), order=False)
+    priority = attr.ib(default=str(), order=False) # P4 TABLE PRIORITY: BIGGER NUMBERS HIGHER PRIORIRTY
 
     def to_string(self):
         params = self.params if self.params and type(self.params) == list else []

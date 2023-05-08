@@ -25,35 +25,33 @@ class RuleStatistics:
         return Counter(result)
     
     def compute_src_stats(self):
-        for rule in self.rules
-            for src_ip in rule.header.get("source"):
-                result.append(src_ip)
-                
+        result = [str(rule.header.get('src_ip')) for rule in self.rules]
+        # for rule in self.rules:
+        #     for src_ip in rule.header.get("source"):
+        #         result.append(src_ip)
         return Counter(result)
 
     def compute_dst_stats(self):
-        result = [str(list(rule.header.get('destination').keys())) for rule in self.rules]
+        result = [str(rule.header.get('dst_ip')) for rule in self.rules]
         return Counter(result)
 
     def compute_src_port_stats(self):
-        result = [str(list(rule.header.get('src_port').keys())) for rule in self.rules]
+        result = [str(rule.header.get('src_port')) for rule in self.rules]
         return Counter(result)
 
     def compute_dst_port_stats(self):
-        result = [str(list(rule.header.get('dst_port').keys())) for rule in self.rules]
+        result = [str(rule.header.get('dst_port'))  for rule in self.rules]
         return Counter(result)
     
 
-      ### NEEDS TO HAVE CONFIG IPs
-   
     # negation calculation should take into account config?
     def compute_negation_stats(self, config):
         result = [rule.has_negation for rule in self.rules]
         return {'non-negation': result.count(False), 'negation': result.count(True)}
 
 
-    def compute_priorities(self, config):            
-        classtypes = [rule.options.get('classtype', 'unknown')["value"][0] for rule in self.rules]
+    def compute_priorities(self, config):     
+        classtypes = [rule.options.get('classtype', 'unknown')[0][1][0] for rule in self.rules]
         priorities = [config.classification_priority[classtype] for classtype in classtypes]
         return Counter(priorities)
 
@@ -62,12 +60,12 @@ class RuleStatistics:
         print(self.negation_stats)
         print(self.protocol_stats)
         print(self.direction_stats)
-        print(self.src_stats)
-        print(self.dst_stats)
+        print("Counter: ", dict(self.src_stats.most_common(10)))
+        print("Counter: ", dict(self.dst_stats.most_common(10)))
         print()
-        print(self.src_port_stats)
+        print("Counter: ", dict(self.src_port_stats.most_common(10)))
         print()
-        print(self.dst_port_stats)
+        print("Counter: ", dict(self.dst_port_stats.most_common(10)))
         print()
         print(self.priorities)
 

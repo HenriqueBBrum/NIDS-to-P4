@@ -54,7 +54,7 @@ def _parse_rules(rule_file):
                 copied_rule.header['direction'] = "unidirectional"
 
                 swap_dir_rule = copy.deepcopy(copied_rule)
-                swap_dir_rule.header['source'], swap_dir_rule.header['destination'] =  swap_dir_rule.header['destination'], swap_dir_rule.header['source']
+                swap_dir_rule.header['src_ip'], swap_dir_rule.header['dst_ip'] =  swap_dir_rule.header['dst_ip'], swap_dir_rule.header['src_ip']
                 swap_dir_rule.header['src_port'], swap_dir_rule.header['dst_port'] =  swap_dir_rule.header['dst_port'], swap_dir_rule.header['src_port']
 
                 modified_rules.append(copied_rule)
@@ -84,7 +84,7 @@ def dedup_rules(config, p4_rules):
         deduped_rules[rule_id].priority_list.append(priority)
         deduped_rules[rule_id].sid_rev_list.append(sid_rev_string)
 
-    return deduped_rules.values()
+    return list(deduped_rules.values())
 
 # Returns value of key in rule options. Option value format: [(option_index, [option_index_values, ...]), ...]
 def _get_simple_option_value(key, options, default="ERROR"):
@@ -100,12 +100,12 @@ def adjust_rules(config, deduped_rules):
     for rule in deduped_rules:
         copied_header = copy.deepcopy(rule.header)
        
-        copied_header['source'] = _replace_system_variables(copied_header['source'],  config.ip_addresses)
+        copied_header['src_ip'] = _replace_system_variables(copied_header['src_ip'],  config.ip_addresses)
         copied_header['src_port'] = _replace_system_variables(copied_header['src_port'],  config.ports)
-        copied_header['destination'] = _replace_system_variables(copied_header['destination'], config.ip_addresses)
+        copied_header['dst_ip'] = _replace_system_variables(copied_header['dst_ip'], config.ip_addresses)
         copied_header['dst_port'] = _replace_system_variables(copied_header['dst_port'],  config.ports)
 
-        if(_IP_negated(copied_header["source"]) or _IP_negated(copied_header["destination"])):
+        if(_IP_negated(copied_header["src_ip"]) or _IP_negated(copied_header["dst_ip"])):
             continue
     
         copied_header["src_port"] = _modify_negated_ports(copied_header["src_port"])

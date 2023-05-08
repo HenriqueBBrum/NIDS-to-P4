@@ -42,41 +42,5 @@ class AggregatedRule(object):
         self.priority_list = priority_list
         self.sid_rev_list = sid_rev_list
 
-    def rules_count(self):
-        return len(self.priority_list)
-
-    def min_priority(self):
-        return min(self.priority_list)
-
-    def max_priority(self):
-        return max(self.priority_list)
-
     def sids(self):
         return list(set(self.sid_list))
-    
-    # def to_match_string(self):
-    #     src_port_string = self.__port_to_P4_match(self.src_port)
-    #     dst_port_string = self.__port_to_P4_match(self.dst_port)
-
-    #     return f'{hex(self.proto)} ' + \
-    #            f'0x{self.src_addr.decode("utf-8")}&&&0x{self.src_addr_mask.decode("utf-8")} ' + \
-    #            src_port_string + \
-    #            f'0x{self.dst_addr.decode("utf-8")}&&&0x{self.dst_addr_mask.decode("utf-8")} ' + \
-    #            dst_port_string + \
-    #            f'{hex(self.flags)}&&&{hex(self.flags_mask)}'
-
-    # @staticmethod
-    # def __port_to_P4_match(port):
-    #     port_to_string = ""
-    #     if(isinstance(port, range)):
-    #         port_to_string = f'{port.start}->{port.stop}'
-    #     else:
-    #         port_to_string = f'{port} '
-
-    #     return port_to_string
-
-    # def to_dict(self):
-    #     return {'match': self.to_match_string(),
-    #             'priority_list': self.priority_list,
-    #             'sid_list': self.sid_list}
-    

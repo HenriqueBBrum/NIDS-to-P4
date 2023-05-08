@@ -77,10 +77,10 @@ class Parser(object):
         
         header_dict["action"] = self.__action(header[0])
         header_dict["proto"] = self.__proto(header[1])
-        header_dict["source"] = self.__ip(header[2])
+        header_dict["src_ip"] = self.__ip(header[2])
         header_dict["src_port"] = self.__port(header[3])
         header_dict["direction"] = self.__direction(header[4])
-        header_dict["destination"] = self.__ip(header[5])
+        header_dict["dst_ip"] = self.__ip(header[5])
         header_dict["dst_port"] = self.__port(header[6])
 
         return header_dict
@@ -253,14 +253,14 @@ class Parser(object):
               
 
     # Validates the direction
-    def __direction(self, dst):
-        destinations = {"->": "unidirectional",
+    def __direction(self, direction):
+        directions = {"->": "unidirectional",
                         "<>": "bidirectional"}
 
-        if dst in destinations:
-            return destinations[dst]
+        if direction in directions:
+            return directions[direction]
         else:
-            msg = "Invalid destination variable %s" % dst
+            msg = "Invalid direction variable %s" % direction
             raise ValueError(msg)
         
 

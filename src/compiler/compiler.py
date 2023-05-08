@@ -66,7 +66,8 @@ def parse_compiler_goal(compiler_goal_path):
 
     return compiler_goal
 
-
+# Functions related to the parsing of Snort/Suricata rules from multiple files, and the subsequent deduplication, 
+# replacement of system variables, port groupping and fixing negated headers 
 def rule_parsing_stage(config, rules_path):
     ignored_rule_files = {"snort2-community.rules"}
 
@@ -78,10 +79,7 @@ def rule_parsing_stage(config, rules_path):
     
     print("---- Deduplication of rules..... ----")
     deduped_rules = dedup_rules(config, fixed_bidirectional_rules)
-
-    
-      
-
+   
     print("---- Adjusting rules. Replacing variables,grouping ports into ranges and adjusting negated port rules..... ----")
     modified_rules = adjust_rules(config, deduped_rules) # Currently negated IPs are not supported
 
@@ -89,10 +87,13 @@ def rule_parsing_stage(config, rules_path):
     print("Total original rules: {}".format(len(original_rules)))
     print("Total rules after fixing bidirectional rules: {}".format(len(fixed_bidirectional_rules)))
     print("Total processed rules dedup: {}".format(len(deduped_rules)))
+    print("Total non-negated IP rules: {}".format(len(modified_rules)))
+
 
     return modified_rules
 
-
+# Functions related to the conversion of parsed Snort/Suricata rule to P4 tables and the subsequent deduplication, 
+# reduction and saving of table entries
 def rule_to_P4_table_entry_stage(config, modified_rules):
     print("---- Converting parsed rules to P4 table matches ----")
     ipv4_p4_table_matches, ipv6_p4_table_matches = rules_to_P4_table_match(modified_rules, config)
@@ -122,22 +123,22 @@ def rule_to_P4_table_entry_stage(config, modified_rules):
     # print("Total processed p4 rules reduced p4id: {}".format(p4id_rules_reduced))
     # p4id_rules_reduced = sum([compile_p4id_ternary_range_size(rule) for rule in p4_rules_reduced])
 
-    print()
-    print("Sids results:")
-    unique_sids = list(set(sids))
-    print(f"Amt of sids: {len(sids)}")
-    print(f'Min: {min(rules_qnt)}')
-    print(f'Max: {max(rules_qnt)}')
-    from collections import Counter
+    # print()
+    # print("Sids results:")
+    # unique_sids = list(set(sids))
+    # print(f"Amt of sids: {len(sids)}")
+    # print(f'Min: {min(rules_qnt)}')
+    # print(f'Max: {max(rules_qnt)}')
+    # from collections import Counter
 
-    print(f'Distribution: {sorted(list(set(rules_qnt)))}')
-    print(f'Distribution Counter: {Counter(rules_qnt)}')
-    print(f'Unique rules count: {len(unique_sids)}')
+    # print(f'Distribution: {sorted(list(set(rules_qnt)))}')
+    # print(f'Distribution Counter: {Counter(rules_qnt)}')
+    # print(f'Unique rules count: {len(unique_sids)}')
 
     return p4_ipv4_table_entries, p4_ipv6_table_entires
 
 
-
+# Returns a reduced table entries list according to "max_table_size" and "target_goal" as defined in the compiler goal file
 def prioritize_table_entries(compiler_goal, table_entries): 
     VALID_TARGET_GOALS = {"max_severity": max_severity, "max_rules": max_rules, "random_rules": random_rules}
     max_table_size = compiler_goal["table_size_limit"]
@@ -148,27 +149,34 @@ def prioritize_table_entries(compiler_goal, table_entries):
 
     return prioritized_rules
 
+# Returns the first "max_table_size" entries according to the highest priority
+# The bigger the priority number the higher the priority for P4 TABLES ENTRIES
+# WARNING
+# Before calling func "create_table_entries" in "rule_to_P4_table_entry_stage" the priority was according to Snort configuration
+# Snort priority is as follows:
+#          1 - High
+#          2 - Medium
+#          3 - Lot
+#          2 - Very low
 def max_severity(table_entries, max_table_size):
     capacity_limit = min(len(table_entries), max_table_size)
-
-    # Prioritize rule based on the severity/priority
-    sorted_table_entries_by_severity = sorted(table_entries, key=lambda entry: entry.priority, reverse=True)
+    sorted_table_entries_by_severity = sorted(table_entries, key=lambda entry: entry.priority, reverse=True) 
     return sorted_table_entries_by_severity[0:capacity_limit]
 
+# Returns the first "max_table_size" entries according to the number of sid/rev values of each table entry
 def max_rules(table_entries, max_table_size):
     capacity_limit = min(len(table_entries), max_table_size)
-
-    # Prioritize rule based on the quantity of NIDS rules
     sorted_table_entries_by_rules_quantity = sorted(table_entries, key=lambda entry: len(entry.agg_match.sid_rev_list), reverse=True)
     return sorted_table_entries_by_rules_quantity[0:capacity_limit]
-
+    
+      
+# Returns ther first "max_table_size" random entries
 def random_rules(table_entries, max_table_size):
-    prioritized_rules = []
     capacity_limit = min(len(table_entries), max_table_size)
     prioritized_rules = random.sample(table_entries, capacity_limit)
     return prioritized_rules
 
-
+# Saves the list of table entries into a file
 def save_table_entries(table_entries, filepath):
     with open(filepath, 'w') as file:
         for table_entry in table_entries:

@@ -6,11 +6,13 @@ import socket
 from P4_related_classes import *
 
 PROTO_MAPPING = {'icmp': 1, 'ip': 4, 'tcp': 6, 'udp': 17}
+MAX_PRIORITY = 4
+
 
 # Flattens snort rules to multiple p4 table entries
-def rules_to_P4_table_match(grouped_rules, config):
+def rules_to_P4_table_match(rules, config):
     ipv4_P4_rules, ipv6_P4_rules = [], []
-    for parsed_rule in grouped_rules:
+    for parsed_rule in rules:
         ipv4_rules, ivp6_rules = _rule_to_P4_table_match(parsed_rule)
 
         ipv4_P4_rules.extend(ipv4_rules)
@@ -18,12 +20,12 @@ def rules_to_P4_table_match(grouped_rules, config):
 
     return ipv4_P4_rules, ipv6_P4_rules
 
-def _rule_to_P4_table_match(grouped_rule):
-    proto = grouped_rule.header.get('proto')
-    src_ip_list = grouped_rule.header.get('source')
-    src_port_list = grouped_rule.header.get('src_port')
-    dst_ip_list = grouped_rule.header.get('destination')
-    dst_port_list = grouped_rule.header.get('dst_port')
+def _rule_to_P4_table_match(parsed_rule):
+    proto = parsed_rule.header.get('proto')
+    src_ip_list = parsed_rule.header.get('src_ip')
+    src_port_list = parsed_rule.header.get('src_port')
+    dst_ip_list = parsed_rule.header.get('dst_ip')
+    dst_port_list = parsed_rule.header.get('dst_port')
 
     if proto not in PROTO_MAPPING:
         print("No mapping for proto {}".format(proto))
@@ -38,8 +40,8 @@ def _rule_to_P4_table_match(grouped_rule):
                 
             for src_port in src_port_list:
                 for dst_port in dst_port_list:
-                    P4_rule_match = _create_P4_table_match(proto, src_ip[0], src_port[0], dst_ip[0], dst_port[0], grouped_rule.flags)
-                    P4_rule = P4AggregatedMatch(P4_rule_match, grouped_rule.priority_list, grouped_rule.sid_rev_list)
+                    P4_rule_match = _create_P4_table_match(proto, src_ip[0], src_port[0], dst_ip[0], dst_port[0], parsed_rule.flags)
+                    P4_rule = P4AggregatedMatch(P4_rule_match, parsed_rule.priority_list, parsed_rule.sid_rev_list)
 
                     if _ip_type(src_ip[0]) == IPv4Address:
                         ipv4_flat_P4_rules.append(P4_rule)
@@ -221,7 +223,6 @@ def _get_port_range_start_end(port):
     else:
         return int(port), int(port)
 
-
 def create_table_entries(rules, table_name, output_port_param='1'):
     count = 0
     sids = []
@@ -233,12 +234,12 @@ def create_table_entries(rules, table_name, output_port_param='1'):
         table_entry = P4TableEntry(table=table_name,
                                        action='redirect',
                                        params=[output_port_param],
-                                       priority=rule.min_priority(),
+                                       priority=(MAX_PRIORITY - rule.min_priority()),
                                        agg_match=rule)
         
         table_entries.append(table_entry)
 
-        sids.extend(rule.sids())
-        rules_qnt.append(len(rule.sids()))
+        sids.extend(rule.sid_rev())
+        rules_qnt.append(len(rule.sid_rev()))
 
     return table_entries, sids, rules_qnt
