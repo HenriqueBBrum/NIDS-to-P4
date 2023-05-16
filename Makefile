@@ -1,8 +1,8 @@
 TARGET_DIR=target
 DATASET_DIR=dataset
 
-COMPILER_EXPERIMENTS_DIR=experiments/rule_compiler_evaluation
-DATA_PLANE_EXPERIMENTS_DIR=experiments/data_plane_evaluation
+COMPILER_EXPERIMENTS_DIR=experiments/compiler_eval
+DATA_PLANE_EXPERIMENTS_DIR=experiments/data_plane_eval
 
 SNORT_COMMUNITY_RULES=etc/rules/snort-community
 SNORT2_EMERGING_RULES=etc/rules/snort2-emerging
@@ -11,15 +11,29 @@ REGISTERED_RULES=etc/rules/registered
 SNORT_CONFIG=etc/config
 COMPILER_GOAL=etc/compiler_goal.json
 
-ifndef EVAL_RULE
-EVAL_RULE = $(SNORT_COMMUNITY_RULES)
+
+ifndef EVAL_RULES
+EVAL_RULES=$(SNORT_COMMUNITY_RULES)
 endif
+
+ifneq ($(filter compiler.time_eval,$(MAKECMDGOALS)),)
+TIME_PROFILE_NAME=$(basename $(notdir $(EVAL_RULES)))_time_
+NUM_OF_FILES=$(shell ls -dq $(COMPILER_EXPERIMENTS_DIR)/$(TIME_PROFILE_NAME)* | wc -l)
+endif
+
+ifneq ($(filter compiler.memory_eval,$(MAKECMDGOALS)),)
+MEM_PROFILE_NAME=$(basename $(notdir $(EVAL_RULES)))_mem_
+NUM_OF_FILES=$(shell ls -dq $(COMPILER_EXPERIMENTS_DIR)/$(MEM_PROFILE_NAME)* | wc -l)
+endif
+
+debug:
+	$(MEM_PROFILE_NAME)
 
 build:
 	mkdir -p ${TARGET_DIR} ${DATASET_DIR} ${COMPILER_EXPERIMENTS_DIR} ${DATA_PLANE_EXPERIMENTS_DIR}
 
 compiler.community: 
-	python3 src/compiler/compiler.py ${SNORT_CONFIG} ${SNORT_COMMUNITY_RULES} ${COMPILER_GOAL}
+	mprof run python3 -m memory_profiler src/compiler/compiler.py ${SNORT_CONFIG} ${SNORT_COMMUNITY_RULES} ${COMPILER_GOAL}
 
 compiler.registered:
 	python3 src/compiler/compiler.py ${SNORT_CONFIG} ${REGISTERED_RULES} ${COMPILER_GOAL}
@@ -27,8 +41,16 @@ compiler.registered:
 compiler.emerging: 
 	python3 src/compiler/compiler.py ${SNORT_CONFIG} ${SNORT2_EMERGING_RULES} ${COMPILER_GOAL}
 
-compiler.eval:
-	python3 src/compiler/compiler.py ${SNORT_CONFIG} ${EVAL_RULE} ${COMPILER_GOAL} ${COMPILER_EXPERIMENTS_DIR}
+compiler.time_eval:
+	pyinstrument -o $(COMPILER_EXPERIMENTS_DIR)/$(TIME_PROFILE_NAME)$(NUM_OF_FILES).html -r html \
+	src/compiler/compiler.py ${SNORT_CONFIG} ${EVAL_RULES} ${COMPILER_GOAL}
+
+compiler.memory_eval:
+	mprof run --python --output $(COMPILER_EXPERIMENTS_DIR)/$(MEM_PROFILE_NAME)$(NUM_OF_FILES).dat python3 \
+	src/compiler/compiler.py  ${SNORT_CONFIG} ${EVAL_RULES} ${COMPILER_GOAL} 
+
+
+
 
 docker.build:
 	docker build -t p4lang/p4app:p4snort .

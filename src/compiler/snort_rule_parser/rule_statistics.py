@@ -50,8 +50,8 @@ class RuleStatistics:
         return {'non-negation': result.count(False), 'negation': result.count(True)}
 
 
-    def compute_priorities(self, config):     
-        classtypes = [rule.options.get('classtype', 'unknown')[0][1][0] for rule in self.rules]
+    def compute_priorities(self, config):    
+        classtypes = [rule.options.get('classtype', 'unknown')[1][0] for rule in self.rules]
         priorities = [config.classification_priority[classtype] for classtype in classtypes]
         return Counter(priorities)
 
