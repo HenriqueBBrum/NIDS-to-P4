@@ -40,8 +40,8 @@ def main(config_path, rules_path, compiler_goal, table_entries_file="src/p4/p4sn
     print("*" * 20 + " PRIORITIZING AND SAVING TABLE ENTRIES " + "*" * 21+ "\n\n")
     combined_table_entries = p4_ipv4_table_entries + p4_ipv6_table_entries
 
-    prioritized_table_entries = prioritize_table_entries(compiler_goal, combined_table_entries)
-    save_table_entries(prioritized_table_entries, table_entries_file)
+    # prioritized_table_entries = prioritize_table_entries(compiler_goal, combined_table_entries)
+    # save_table_entries(prioritized_table_entries, table_entries_file)
    
    
 
@@ -67,7 +67,7 @@ def parse_compiler_goal(compiler_goal_path):
 # Functions related to the parsing of Snort/Suricata rules from multiple files, and the subsequent deduplication, 
 # replacement of system variables, port groupping and fixing negated headers 
 def rule_parsing_stage(config, rules_path):
-    ignored_rule_files = {"snort2-community.rules"}
+    ignored_rule_files = {}
 
     print("---- Getting and parsing rules..... ----")
     print("---- Splitting bidirectional rules..... ----")
