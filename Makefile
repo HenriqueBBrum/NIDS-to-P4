@@ -6,7 +6,7 @@ DATA_PLANE_EXPERIMENTS_DIR=experiments/data_plane_eval
 
 SNORT_COMMUNITY_RULES=etc/rules/snort-community
 SNORT2_EMERGING_RULES=etc/rules/snort2-emerging
-REGISTERED_RULES=etc/rules/registered
+SNORT3_REGISTERED_RULES=etc/rules/snort3-registered
 
 SNORT_CONFIG=etc/config
 COMPILER_GOAL=etc/compiler_goal.json
@@ -33,10 +33,10 @@ build:
 	mkdir -p ${TARGET_DIR} ${DATASET_DIR} ${COMPILER_EXPERIMENTS_DIR} ${DATA_PLANE_EXPERIMENTS_DIR}
 
 compiler.community: 
-	mprof run python3 -m memory_profiler src/compiler/compiler.py ${SNORT_CONFIG} ${SNORT_COMMUNITY_RULES} ${COMPILER_GOAL}
+	python3 src/compiler/compiler.py ${SNORT_CONFIG} ${SNORT_COMMUNITY_RULES} ${COMPILER_GOAL}
 
 compiler.registered:
-	python3 src/compiler/compiler.py ${SNORT_CONFIG} ${REGISTERED_RULES} ${COMPILER_GOAL}
+	python3 src/compiler/compiler.py ${SNORT_CONFIG} ${SNORT3_REGISTERED_RULES} ${COMPILER_GOAL}
 
 compiler.emerging: 
 	python3 src/compiler/compiler.py ${SNORT_CONFIG} ${SNORT2_EMERGING_RULES} ${COMPILER_GOAL}

@@ -34,7 +34,8 @@ def get_rules(rules_path, ignored_rule_files):
         parsed_rules, adjusted_rules = _parse_rules(rule_file)
         original_rules.extend(parsed_rules)
         modified_rules.extend(adjusted_rules)
-      
+
+    print(len(original_rules))
     return original_rules, modified_rules
 
 # Parse each rule from a rule file
@@ -42,13 +43,16 @@ def _parse_rules(rule_file):
     parsed_rules, modified_rules = [], []
     with open(rule_file, 'r') as file:
         lines = file.readlines()
+        parser = Parser()
         for line in lines:
             if line.startswith("#") or len(line)<=1:
                 continue
-            parser = Parser()
-            parsed_rule = parser.parse_rule(line)
-            parsed_rules.append(parsed_rule)
 
+            parsed_rule = parser.parse_rule(line)
+            if not parsed_rule.header:
+                continue
+
+            parsed_rules.append(parsed_rule)
             copied_rule = copy.deepcopy(parsed_rule)
             if copied_rule.header.get("direction") == "bidirectional":
                 copied_rule.header['direction'] = "unidirectional"

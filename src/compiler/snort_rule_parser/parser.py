@@ -54,6 +54,10 @@ class Parser(object):
         
         header = list(filter(None, header))
         size = len(header)
+        if size == 2:
+            print("The new snort3 rule format without IPs and Port is not supported")
+            return {}, False
+
         if not size == 7 and not size == 1:
             msg = "Snort rule header is malformed %s" % header
             raise ValueError(msg)
@@ -96,7 +100,8 @@ class Parser(object):
             "dynamic",
             "drop",
             "reject",
-            "sdrop"
+            "sdrop",
+            "rewrite"
         }
 
         if action in actions:
@@ -112,7 +117,8 @@ class Parser(object):
             "tcp",
             "udp",
             "icmp",
-            "ip"
+            "ip", 
+            "http"
         }
 
         if proto.lower() in protos:
@@ -318,18 +324,16 @@ class Parser(object):
             if self.dicts.payload_detection(key):
                 for index, value in data:                
                     valid_option = self.dicts.verify_option(key)
-                    if not valid_option:
+                    if not valid_option[1]:
                         raise ValueError("Unrecognized option: %s" % key)
-
             else:
                 valid_option = self.dicts.verify_option(key)
-                if not valid_option:
+                if not valid_option[1]:
                     raise ValueError("Unrecognized option: %s" % key)
                 
                 if key=="classtype":
                     classification = self.dicts.classtypes(data[1][0]) # {"classtype : (index, [value])"}
                     if not classification:
                         raise ValueError("Unrecognized rule classification: %s" % value)
-                
-
+            
         return options

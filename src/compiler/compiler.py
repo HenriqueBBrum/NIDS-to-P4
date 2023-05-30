@@ -23,12 +23,11 @@ from rules_to_P4 import rules_to_P4_table_match, dedup_table_matches, reduce_tab
 def main(config_path, rules_path, compiler_goal, table_entries_file="src/p4/p4snort.config"):
     compiler_goal = parse_compiler_goal(compiler_goal)
     config = SnortConfiguration(snort_version=2, configuration_dir=config_path)
-
     print("*" * 80)
     print("*" * 80)
     print("*" * 26 + " SNORT RULES PARSING STAGE " + "*" * 27+ "\n\n")
     modified_rules = rule_parsing_stage(config, rules_path)
-
+    
     print("\n\n"+"*" * 80)
     print("*" * 80)
     print("*" * 23 + " SNORT RULES TO P4 TABLE ENTRIES STAGE " + "*" * 23+ "\n\n")
@@ -75,10 +74,10 @@ def rule_parsing_stage(config, rules_path):
     stats = RuleStatistics(config, original_rules)
     stats.print_all()
     
+
     print("---- Deduplication of rules..... ----")
     deduped_rules = dedup_rules(config, fixed_bidirectional_rules)
    
-
 
     print("---- Adjusting rules. Replacing variables,grouping ports into ranges and adjusting negated port rules..... ----")
     modified_rules = adjust_rules(config, deduped_rules) # Currently negated IPs are not supported
@@ -88,7 +87,6 @@ def rule_parsing_stage(config, rules_path):
     print("Total rules after fixing bidirectional rules: {}".format(len(fixed_bidirectional_rules)))
     print("Total processed rules dedup: {}".format(len(deduped_rules)))
     print("Total non-negated IP rules: {}".format(len(modified_rules)))
-
 
     return modified_rules
 

@@ -22,14 +22,14 @@ def rules_to_P4_table_match(rules, config):
 
 def _rule_to_P4_table_match(parsed_rule):
     proto = parsed_rule.header.get('proto')
+    if proto not in PROTO_MAPPING:
+        print("No mapping for proto {}".format(proto))
+        return [], []
+        
     src_ip_list = parsed_rule.header.get('src_ip')
     src_port_list = parsed_rule.header.get('src_port')
     dst_ip_list = parsed_rule.header.get('dst_ip')
     dst_port_list = parsed_rule.header.get('dst_port')
-
-    if proto not in PROTO_MAPPING:
-        print("No mapping for proto {}".format(proto))
-        return [], []
 
     ipv4_flat_P4_rules, ipv6_flat_P4_rules = [], []
     for src_ip in src_ip_list:

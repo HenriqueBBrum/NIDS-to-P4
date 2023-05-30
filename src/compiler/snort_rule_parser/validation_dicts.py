@@ -123,10 +123,8 @@ class Dicts():
                            # soid ( Shared Library Rule Generator and
                            # SID ) ex: "gid|sid", service ( Target-Based
                            # Service Identifier ) ex: "http",
+                           "soid",
                            "service",
-                           "bufferlen",
-                           "dnp3_ind",
-                           "modbus_func"
                            }
 
         if option:
@@ -457,10 +455,19 @@ class Dicts():
                              # information element field. User can input
                              # information element value,
                              # an integer in $[0, 255]$,
-                             "gtp_version"
+                             "gtp_version",
                              # The gtp_version keyword is used to check for
                              # specific GTP version. Relates to gtp_info
                              # and gtp_type tables.
+                            "http_param",
+                            "modbus_data",
+                            "ber_data",
+                            "ber_skip",
+                            "raw_data",
+                            "http_raw_body",
+                            "bufferlen",
+                            "dnp3_ind",
+                            "modbus_func"
                              }
 
         if option:
@@ -515,6 +522,7 @@ class Dicts():
                               # The flowbits keyword allows rules to
                               # track states during a transport protocol
                               # session.
+                              "file_type",
                               "seq",
                               # The seq keyword is used to check for a
                               # specific TCP sequence number
@@ -705,16 +713,16 @@ class Dicts():
 
         # Check if a rule option is a valid option type 
         if option in payload_detection:
-            return "payload", option
+            return "payload", True
         if option in non_payload_detect:
-            return "non-payload", option
+            return "non-payload", True
         if option in general_options:
-            return "general", option
+            return "general", True
         if option in rule_tresholds:
-            return "threshold", option
+            return "threshold", True
         if option in content_modifiers:
-            return "content_modifier", option
+            return "content_modifier", True
         if option in post_detect:
-            return "post_detect", option
+            return "post_detect", True
         
-        return "", []
+        return "", False
