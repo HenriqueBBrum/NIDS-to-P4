@@ -39,8 +39,8 @@ def main(config_path, rules_path, compiler_goal, table_entries_file="src/p4/p4sn
     print("*" * 20 + " PRIORITIZING AND SAVING TABLE ENTRIES " + "*" * 21+ "\n\n")
     combined_table_entries = p4_ipv4_table_entries + p4_ipv6_table_entries
 
-    # prioritized_table_entries = prioritize_table_entries(compiler_goal, combined_table_entries)
-    # save_table_entries(prioritized_table_entries, table_entries_file)
+    prioritized_table_entries = prioritize_table_entries(compiler_goal, combined_table_entries)
+    save_table_entries(prioritized_table_entries, table_entries_file)
    
    
 
@@ -48,12 +48,11 @@ def parse_compiler_goal(compiler_goal_path):
     VALID_TARGET_PLATFORMS = {"bmv2"}
     VALID_TARGET_GOALS = {"max_severity": max_severity, "max_rules": max_rules, "random_rules": random_rules}
 
-
     with open(compiler_goal_path, 'r') as compiler_goal_file:
         compiler_goal = load(compiler_goal_file)
 
-    if compiler_goal["table_size_limit"] < 1:
-        raise Exception(f'Invalid table size: {compiler_goal["table_size_limit"]}')
+    # if compiler_goal["table_size_limit"] < 1:
+    #     raise Exception(f'Invalid table size: {compiler_goal["table_size_limit"]}')
 
     if compiler_goal["target_platform"].lower() not in VALID_TARGET_PLATFORMS:
         raise Exception(f'Target platform not supported: {compiler_goal["target_platform"]}')
@@ -100,8 +99,6 @@ def rule_to_P4_table_entry_stage(config, modified_rules):
     deduped_ipv4_table_matches = dedup_table_matches(ipv4_p4_table_matches)
     deduped_ipv6_table_matches = dedup_table_matches(ipv6_p4_table_matches)
     
-    #p4id_rules = sum([compile_p4id_ternary_range_size(rule) for rule in p4_rules_dedup])
-
     print("---- Reducing P4 rules ----")
     reduced_ipv4_table_matches = reduce_table_matches(deduped_ipv4_table_matches)
     reduced_ipv6_table_matches = reduce_table_matches(deduped_ipv6_table_matches)
@@ -116,65 +113,47 @@ def rule_to_P4_table_entry_stage(config, modified_rules):
     print("Snort to P4 results: \n")
     print("Total processed p4 rules: {}".format(len(ipv4_p4_table_matches)+len(ipv6_p4_table_matches)))
     print("Total processed p4 rules after deduping: {}".format(len(deduped_ipv4_table_matches)+len(deduped_ipv6_table_matches)))
-    # print("Total processed p4 rules dedup p4id: {}".format(p4id_rules))
     print("Total processed p4 rules reduced: {}".format(len(reduced_ipv4_table_matches)+len(reduced_ipv6_table_matches)))
-    # print("Total processed p4 rules reduced p4id: {}".format(p4id_rules_reduced))
-    # p4id_rules_reduced = sum([compile_p4id_ternary_range_size(rule) for rule in p4_rules_reduced])
-
-    # print()
-    # print("Sids results:")
-    # unique_sids = list(set(sids))
-    # print(f"Amt of sids: {len(sids)}")
-    # print(f'Min: {min(rules_qnt)}')
-    # print(f'Max: {max(rules_qnt)}')
-    # from collections import Counter
-
-    # print(f'Distribution: {sorted(list(set(rules_qnt)))}')
-    # print(f'Distribution Counter: {Counter(rules_qnt)}')
-    # print(f'Unique rules count: {len(unique_sids)}')
 
     return p4_ipv4_table_entries, p4_ipv6_table_entires
 
 
 
-# Returns a reduced table entries list according to "max_table_size" and "target_goal" as defined in the compiler goal file
+# Returns a table entries list according to "target_goal" as defined in the compiler goal file
 def prioritize_table_entries(compiler_goal, table_entries): 
     VALID_TARGET_GOALS = {"max_severity": max_severity, "max_rules": max_rules, "random_rules": random_rules}
-
-    max_table_size = compiler_goal["table_size_limit"]
     try:  
-        prioritized_rules = VALID_TARGET_GOALS[compiler_goal["target_goal"]](table_entries, max_table_size)
+        prioritized_rules = VALID_TARGET_GOALS[compiler_goal["target_goal"]](table_entries)
     except:
         raise Exception
 
     return prioritized_rules
 
-# Returns the first "max_table_size" entries according to the highest priority
+# Returns entries ordered according to the highest priority
 # The bigger the priority number the higher the priority for P4 TABLES ENTRIES
 # WARNING
-# Before calling func "create_table_entries" in "rule_to_P4_table_entry_stage" the priority was according to Snort configuration
+# Before calling function "create_table_entries" in "rule_to_P4_table_entry_stage" the priority was according to Snort configuration
 # Snort priority is as follows:
 #          1 - High
 #          2 - Medium
-#          3 - Lot
-#          2 - Very low
-def max_severity(table_entries, max_table_size):
-    capacity_limit = min(len(table_entries), max_table_size)
-    sorted_table_entries_by_severity = sorted(table_entries, key=lambda entry: entry.priority, reverse=True) 
-    return sorted_table_entries_by_severity[0:capacity_limit]
+#          3 - Low
+#          4 - Very low
+# P4 table has the inverse behavior:
+#          1 - Very Low
+#          2 - Low
+#          3 - Medium
+#          4 - High
+def max_severity(table_entries):
+    return sorted(table_entries, key=lambda entry: entry.priority, reverse=True) 
 
-# Returns the first "max_table_size" entries according to the number of sid/rev values of each table entry
-def max_rules(table_entries, max_table_size):
-    capacity_limit = min(len(table_entries), max_table_size)
-    sorted_table_entries_by_rules_quantity = sorted(table_entries, key=lambda entry: len(entry.agg_match.sid_rev_list), reverse=True)
-    return sorted_table_entries_by_rules_quantity[0:capacity_limit]
+# Returns entries ordered according to the number of sid/rev values of each table entry
+def max_rules(table_entries):
+    return sorted(table_entries, key=lambda entry: len(entry.agg_match.sid_rev_list), reverse=True)
     
       
-# Returns ther first "max_table_size" random entries
-def random_rules(table_entries, max_table_size):
-    capacity_limit = min(len(table_entries), max_table_size)
-    prioritized_rules = random.sample(table_entries, capacity_limit)
-    return prioritized_rules
+# Returns random entries
+def random_rules(table_entries):
+    return random.sample(table_entries)
 
 # Saves the list of table entries into a file
 def save_table_entries(table_entries, filepath):
