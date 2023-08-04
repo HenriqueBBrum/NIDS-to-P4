@@ -18,19 +18,18 @@ class P4Match(object):
 
     dst_port = attr.ib(default=str(), order=False)
 
-    flags = attr.ib(default=0xff, order=False)
-    flags_mask = attr.ib(default=0xff, order=False)
+    flags = attr.ib(default=str(), order=False)
 
     def to_string(self):
         src_port_string = self.__port_to_P4_match(self.src_port)
         dst_port_string = self.__port_to_P4_match(self.dst_port)
 
         return f'{hex(self.proto)} ' + \
-               f'0x{self.src_addr.decode("utf-8")}&&&0x{self.src_addr_mask.decode("utf-8")} ' + \
+               f'{self.src_addr}&&&{self.src_addr_mask} ' + \
                src_port_string + \
-               f'0x{self.dst_addr.decode("utf-8")}&&&0x{self.dst_addr_mask.decode("utf-8")} ' + \
+               f'{self.dst_addr}&&&{self.dst_addr_mask} ' + \
                dst_port_string + \
-               f'{hex(self.flags)}&&&{hex(self.flags_mask)}'
+               f'{self.flags}'
 
     @staticmethod
     def __port_to_P4_match(port):

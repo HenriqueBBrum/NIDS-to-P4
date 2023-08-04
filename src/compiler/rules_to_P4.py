@@ -1,7 +1,7 @@
 from ipaddress import ip_network, ip_address, IPv4Address
 import binascii
 import socket
-
+import struct
 
 from P4_related_classes import *
 
@@ -59,24 +59,21 @@ def _ip_type(ip):
 
 # Converts Snort rule header values to P4 table entries
 def _create_P4_table_match(proto, src_ip, src_port, dst_ip, dst_port, flags):
-    flags, flags_mask = _convert_flags_to_ternary(flags)
-
     p4_match_rule = P4Match()
     p4_match_rule.proto = PROTO_MAPPING.get(proto, None)
 
-    p4_match_rule.src_network, p4_match_rule.src_addr, p4_match_rule.src_addr_mask = convert_ip_network_to_hex(src_ip)
+    p4_match_rule.src_network, p4_match_rule.src_addr, p4_match_rule.src_addr_mask = _convert_ip_to_ternary(src_ip)
     p4_match_rule.src_port = src_port
 
-    p4_match_rule.dst_network, p4_match_rule.dst_addr, p4_match_rule.dst_addr_mask = convert_ip_network_to_hex(dst_ip)
+    p4_match_rule.dst_network, p4_match_rule.dst_addr, p4_match_rule.dst_addr_mask = _convert_ip_to_ternary(dst_ip)
     p4_match_rule.dst_port= dst_port
 
-    p4_match_rule.flags = flags
-    p4_match_rule.flags_mask = flags_mask
+    p4_match_rule.flags =  _convert_flags_to_binary(flags)
 
     return p4_match_rule
 
 
-def convert_ip_network_to_hex(_ip_network):
+def _convert_ip_to_ternary(_ip_network):
     if _ip_type(_ip_network) == IPv4Address:
         if "/" not in _ip_network:
             _ip_network += "/32"
@@ -87,38 +84,38 @@ def convert_ip_network_to_hex(_ip_network):
         IP_type = socket.AF_INET6
 
     network = ip_network(_ip_network, False)
-
     try:
-        ip = binascii.hexlify(socket.inet_pton(IP_type, str(network.network_address))).upper()
-        mask = binascii.hexlify(socket.inet_pton(IP_type, str(network.netmask))).upper()
-        return (network, ip, mask)
+        addr, net_bits = _ip_network.split('/')
+        host_bits = 32 - int(net_bits)
+        mask = socket.inet_ntoa(struct.pack('!I', (1 << 32) - (1 << host_bits)))
+        return network, addr, mask
     except Exception as e:
         print("Error on ip network {}: {}".format(ip_network, e))
 
-    return convert_ip_network_to_hex('255.255.255.255')
+    return _convert_ip_to_ternary('255.255.255.255')
 
 
 # Not supported
 #     + - ALL flag, match on all specified flags plus any others
 #     * - ANY flag, match on any of the specified flags
 #     ! - NOT flag, match if the specified flags aren't set in the packet
-def _convert_flags_to_ternary(flags_input, rule=None):
+def _convert_flags_to_binary(flags_input, rule=None):
     supported_flag_values = {
-        'F': 0x01,
-        'S': 0x02,
-        'R': 0x04,
-        'P': 0x08,
-        'A': 0x10,
-        'U': 0x20,
-        '2': 0x40,
-        '1': 0x80,
+        'F': 1,
+        'S': 2,
+        'R': 4, 
+        'P': 8,
+        'A': 16,
+        'U': 32,
+        '2': 64,
+        '1': 128,
     }
 
     flags = list(''.join(flags_input).replace(' ', ''))
 
     # If no flag set, allow any value
     if len(flags) == 0:
-        return (0x00, 0x00)
+        return f'{0x00:0>8b}'
     
     # Test for not supported characters
     invalid_flags = [invalid_flag for invalid_flag in flags
@@ -126,14 +123,13 @@ def _convert_flags_to_ternary(flags_input, rule=None):
 
     if len(invalid_flags) != 0:
         print("Not supported flags {} found in {} from {} - {}".format(invalid_flags, flags, flags_input, rule))
-        return (0x00, 0x00)
+        return f'{0x00:0>8b}'
 
     result_value = 0
     for flag in flags:
         flag_value = supported_flag_values[flag]
         result_value += flag_value
-
-    return (result_value, 0xff)
+    return f'{result_value:0>8b}'
 
 
 # Deduplicates p4 table entries with same match. Save each duplicate rule's priority and sid/rev 
@@ -211,8 +207,7 @@ def _is_rule_within(rule1, rule2):
     if not r1_match.dst_network.subnet_of(r2_match.dst_network):
         return False
 
-    if not (r1_match.flags == r2_match.flags and \
-            r1_match.flags_mask == r2_match.flags_mask):
+    if not (r1_match.flags == r2_match.flags):
         return False
 
     return True
