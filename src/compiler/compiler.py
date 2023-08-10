@@ -22,7 +22,7 @@ from rules_to_P4 import rules_to_P4_table_match, dedup_table_matches, reduce_tab
 
 
 
-def main(config_path, rules_path, compiler_goal, table_entries_file="p4_table_entries.config"):
+def main(config_path, rules_path, compiler_goal, table_entries_file="output/p4_table_entries.config"):
     parsed_compiler_goal = parse_compiler_goal(compiler_goal)
     config = SnortConfiguration(snort_version=2, configuration_dir=config_path)
     print("*" * 80)
@@ -34,7 +34,6 @@ def main(config_path, rules_path, compiler_goal, table_entries_file="p4_table_en
     print("*" * 80)
     print("*" * 23 + " SNORT RULES TO P4 TABLE ENTRIES STAGE " + "*" * 23+ "\n\n")
     p4_ipv4_table_entries, p4_ipv6_table_entries = rule_to_P4_table_entry_stage(config, modified_rules)
-    print(len(p4_ipv4_table_entries), len(p4_ipv6_table_entries))
 
     print("\n\n"+"*" * 80)
     print("*" * 80)
@@ -102,20 +101,17 @@ def rule_to_P4_table_entry_stage(config, modified_rules):
     deduped_ipv6_table_matches = dedup_table_matches(ipv6_p4_table_matches)
 
     # print("---- Reducing P4 rules ----")
-    # reduced_ipv4_table_matches = reduce_table_matches(deduped_ipv4_table_matches)
-    # reduced_ipv6_table_matches = reduce_table_matches(deduped_ipv6_table_matches)
+    reduced_ipv4_table_matches = reduce_table_matches(deduped_ipv4_table_matches)
+    reduced_ipv6_table_matches = reduce_table_matches(deduped_ipv6_table_matches)
 
     print("---- Generating table entries ----")
-    p4_ipv4_table_entries, sids_ipv4, rules_qnt_ipv4 = create_table_entries(deduped_ipv4_table_matches, "ipv4_ids")
-    p4_ipv6_table_entires, sids_ipv6, rules_qnt_ipv6 = create_table_entries(deduped_ipv6_table_matches, "ipv6_ids")
-
-    sids = sids_ipv4 + sids_ipv6
-    rules_qnt = rules_qnt_ipv4 + rules_qnt_ipv6
+    p4_ipv4_table_entries, sids_ipv4, rules_qnt_ipv4 = create_table_entries(reduced_ipv4_table_matches, "ipv4_ids")
+    p4_ipv6_table_entires, sids_ipv6, rules_qnt_ipv6 = create_table_entries(reduced_ipv6_table_matches, "ipv6_ids")
 
     print("Snort to P4 results: \n")
     print("Total processed p4 rules: {}".format(len(ipv4_p4_table_matches)+len(ipv6_p4_table_matches)))
     print("Total processed p4 rules after deduping: {}".format(len(deduped_ipv4_table_matches)+len(deduped_ipv6_table_matches)))
-    # print("Total processed p4 rules reduced: {}".format(len(reduced_ipv4_table_matches)+len(reduced_ipv6_table_matches)))
+    print("Total processed p4 rules reduced: {}".format(len(reduced_ipv4_table_matches)+len(reduced_ipv6_table_matches)))
 
     return p4_ipv4_table_entries, p4_ipv6_table_entires
 
