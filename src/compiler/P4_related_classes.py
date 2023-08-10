@@ -1,7 +1,9 @@
-### File containing P4 related class to change it from Snort Rules to P4 table actions
+### File containing P4 related classes to change it from Snort Rules to P4 table entries
 
 import attr
 
+# P4Match is the match fields used to pre-filter traffic in the data plane. 
+# These fields are protocol, src IP and port, dst IP and port, and TCP flags (if TCP is used)
 @attr.s
 class P4Match(object):
     proto = attr.ib(default=0, order=False)
@@ -41,6 +43,7 @@ class P4Match(object):
 
         return port_to_string
 
+# P4AggregatedMatch stores the sids and priority information of repeated table entry matches or matches that were "groupped"
 @attr.s
 class P4AggregatedMatch(object):
     match = attr.ib(default=P4Match(), order=False)
@@ -60,7 +63,7 @@ class P4AggregatedMatch(object):
     def sid_rev(self):
         return list(set(self.sid_rev_list))
         
-
+# P4TableEntry is the final object representing the P4 table entries
 @attr.s
 class P4TableEntry(object):
     table = attr.ib(default=str(), order=False)

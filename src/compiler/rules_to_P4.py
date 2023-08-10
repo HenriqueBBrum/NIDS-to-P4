@@ -1,25 +1,27 @@
+# This program converts NIDS rules to P4 table entries, removes duplicates and groups them.
+
 from ipaddress import ip_network, ip_address, IPv4Address
-import binascii
 import socket
 import struct
 
 from P4_related_classes import *
 
 PROTO_MAPPING = {'icmp': 1, 'ip': 4, 'tcp': 6, 'udp': 17}
-MAX_PRIORITY = 4
+MAX_PRIORITY = 4 # NIDS rules max priority
 
+
+# Creates all table entries from the NIDS rules
+def rules_to_P4_table_match(rules, config):
+    ipv4_P4_table_match_list, ipv6_P4_table_match_list = [], []
+    for parsed_rule in rules:
+        ipv4_match, ipv6_match = _rule_to_P4_table_match(parsed_rule)
+
+        ipv4_P4_table_match_list.extend(ipv4_match)
+        ipv6_P4_table_match_list.extend(ipv6_match)
+
+    return ipv4_P4_table_match_list, ipv6_P4_table_match_list
 
 # Flattens snort rules to multiple p4 table entries
-def rules_to_P4_table_match(rules, config):
-    ipv4_P4_rules, ipv6_P4_rules = [], []
-    for parsed_rule in rules:
-        ipv4_rules, ivp6_rules = _rule_to_P4_table_match(parsed_rule)
-
-        ipv4_P4_rules.extend(ipv4_rules)
-        ipv6_P4_rules.extend(ivp6_rules)
-
-    return ipv4_P4_rules, ipv6_P4_rules
-
 def _rule_to_P4_table_match(parsed_rule):
     proto = parsed_rule.header.get('proto')
     if proto not in PROTO_MAPPING:
@@ -51,29 +53,28 @@ def _rule_to_P4_table_match(parsed_rule):
 
     return ipv4_flat_P4_rules, ipv6_flat_P4_rules
 
-
+# Checks the type of a string representing an IP address
 def _ip_type(ip):
     no_network = ip.split("/")[0]
     return type(ip_address(no_network))
 
-
-# Converts Snort rule header values to P4 table entries
+# Converts the Snort rule header values to a P4Match class
 def _create_P4_table_match(proto, src_ip, src_port, dst_ip, dst_port, flags):
     p4_match_rule = P4Match()
     p4_match_rule.proto = PROTO_MAPPING.get(proto, None)
 
-    p4_match_rule.src_network, p4_match_rule.src_addr, p4_match_rule.src_addr_mask = _convert_ip_to_ternary(src_ip)
+    p4_match_rule.src_network, p4_match_rule.src_addr, p4_match_rule.src_addr_mask = _get_IP_address_and_mask(src_ip)
     p4_match_rule.src_port = src_port
 
-    p4_match_rule.dst_network, p4_match_rule.dst_addr, p4_match_rule.dst_addr_mask = _convert_ip_to_ternary(dst_ip)
+    p4_match_rule.dst_network, p4_match_rule.dst_addr, p4_match_rule.dst_addr_mask = _get_IP_address_and_mask(dst_ip)
     p4_match_rule.dst_port= dst_port
 
-    p4_match_rule.flags =  _convert_flags_to_binary(flags)
+    p4_match_rule.flags =  _convert_TCP_flags_to_binary(flags)
 
     return p4_match_rule
 
-
-def _convert_ip_to_ternary(_ip_network):
+# Separates a CIDR based IP into an address and a mask
+def _get_IP_address_and_mask(_ip_network):
     if _ip_type(_ip_network) == IPv4Address:
         if "/" not in _ip_network:
             _ip_network += "/32"
@@ -92,14 +93,13 @@ def _convert_ip_to_ternary(_ip_network):
     except Exception as e:
         print("Error on ip network {}: {}".format(ip_network, e))
 
-    return _convert_ip_to_ternary('255.255.255.255')
-
+    return _get_IP_address_and_mask('255.255.255.255')
 
 # Not supported
 #     + - ALL flag, match on all specified flags plus any others
 #     * - ANY flag, match on any of the specified flags
 #     ! - NOT flag, match if the specified flags aren't set in the packet
-def _convert_flags_to_binary(flags_input, rule=None):
+def _convert_TCP_flags_to_binary(flags_input, rule=None):
     supported_flag_values = {
         'F': 1,
         'S': 2,
@@ -132,7 +132,9 @@ def _convert_flags_to_binary(flags_input, rule=None):
     return f'{result_value:0>8b}'
 
 
-# Deduplicates p4 table entries with same match. Save each duplicate rule's priority and sid/rev 
+
+
+# Deduplicates P4 table entries with the same match. Saves each duplicate rule's priority and sid/rev in a P4AggregatedMatch object
 def dedup_table_matches(rules):
     deduped_p4_rules = {}
     for rule in rules:
@@ -147,6 +149,9 @@ def dedup_table_matches(rules):
     return list(deduped_p4_rules.values())
    
 
+
+
+# Remove P4 table entries that have the same fields as another entry and are within the port or IP range of that entry
 def reduce_table_matches(rules):
     rules_list = []
     rules_groupped = {}
@@ -177,7 +182,7 @@ def reduce_table_matches(rules):
 
     return list(rules_groupped.values())
 
-# Is rule1 within rule2?
+# Is rule1 within rule2? Is rule1's IP or port within rule's2 IP or por range(space)
 def _is_rule_within(rule1, rule2):
     r1_match = rule1.match
     r2_match = rule2.match
@@ -212,23 +217,35 @@ def _is_rule_within(rule1, rule2):
 
     return True
 
+# Get the start and end of a range type
 def _get_port_range_start_end(port):
     if isinstance(port, range):
         return port.start, port.stop-1
     else:
         return int(port), int(port)
 
-def create_table_entries(rules, table_name, output_port_param='1'):
-    count = 0
-    sids = []
-    rules_qnt = []
 
-    table_entries = []
+
+
+# Creates the final table entries with the tablename, action, match, and priority
+# WARNING
+# Snort priority is as follows:
+#          1 - High
+#          2 - Medium
+#          3 - Low
+#          4 - Very low
+# P4 tables have the inverse priority behavior:
+#          1 - Very Low
+#          2 - Low
+#          3 - Medium
+#          4 - High
+def create_table_entries(rules, table_name):
+    count = 0
+    sids, rules_qnt, table_entries = [], [], []
     for rule in rules:
         count += 1
         table_entry = P4TableEntry(table=table_name,
                                        action='redirect',
-                                       params=[output_port_param],
                                        priority=(MAX_PRIORITY - rule.min_priority()),
                                        agg_match=rule)
         

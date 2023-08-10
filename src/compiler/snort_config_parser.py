@@ -1,7 +1,6 @@
 ### This file contains a class that parsers the network variables defined by snort
 ##  Works for Snort 2.* configuration (future versions will inlcude Snort 3.* and Suricata)
 
-
 import re
 
 class SnortConfiguration():
@@ -51,7 +50,7 @@ class SnortConfiguration():
                     self.ports[name] = self.__parse_ports(portvar_line_elements[2].rstrip('\n').replace(" ",""))
            
     # Parses one IP or a list of IPs
-    ### TODO parse with more than 1 sub list in the same level i.e [[], [[], []]]. Needed???
+    ### Does not work with lists within another inner list since they aren't used in NIDS rules, e.g. [[...], [..., [...]]]
     ### TODO validate input line?
     def __parse_ips(self, raw_ips):
         if raw_ips == "any":
@@ -114,8 +113,6 @@ class SnortConfiguration():
         return [(raw_ip, bool(~(local_bool ^ parent_bool)+2))]
 
 
-
-
     # Parses one port or a list of ports
     def __parse_ports(self, raw_ports):
         if raw_ports == "any":
@@ -164,8 +161,7 @@ class SnortConfiguration():
         return [(raw_port, bool(~(local_bool ^ parent_bool)+2))]
 
 
-
-    # Reads line by line and parses lines containing classification priority (lines starting with "config classification:")
+    # Reads line by line and parses the lines containing classification priorities (lines starting with "config classification:")
     def __parse_classification_priority(self, priority_classification_file):    
         with open(priority_classification_file, 'r') as class_file:
             lines  = class_file.readlines()

@@ -1,10 +1,6 @@
-### 
-#    This file contains sets and dictionaries with the names of possible options and classification configs.
-#    Used for validating rules
-###
+# This file contains sets and dictionaries with the names of possible options and classification configs.
 
 from typing import Any
-
 
 class Dicts():
     @staticmethod

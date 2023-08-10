@@ -1,3 +1,5 @@
+# Methods that return statistics about the NIDS rules
+
 from collections import Counter
 
 class RuleStatistics:
@@ -26,9 +28,6 @@ class RuleStatistics:
     
     def compute_src_stats(self):
         result = [str(rule.header.get('src_ip')) for rule in self.rules]
-        # for rule in self.rules:
-        #     for src_ip in rule.header.get("source"):
-        #         result.append(src_ip)
         return Counter(result)
 
     def compute_dst_stats(self):
@@ -43,29 +42,26 @@ class RuleStatistics:
         result = [str(rule.header.get('dst_port'))  for rule in self.rules]
         return Counter(result)
     
-
-    # negation calculation should take into account config?
+    # Negation counter should take into account config file?
     def compute_negation_stats(self, config):
         result = [rule.has_negation for rule in self.rules]
         return {'non-negation': result.count(False), 'negation': result.count(True)}
-
 
     def compute_priorities(self, config):    
         classtypes = [rule.options.get('classtype', 'unknown')[1][0] for rule in self.rules]
         priorities = [config.classification_priority[classtype] for classtype in classtypes]
         return Counter(priorities)
 
-
     def print_all(self):
         print(self.negation_stats)
         print(self.protocol_stats)
         print(self.direction_stats)
-        print("Counter src ip: ", dict(self.src_stats.most_common(10)))
-        print("Counter dst ip: ", dict(self.dst_stats.most_common(10)))
+        print("Top 10 src ip: ", dict(self.src_stats.most_common(10)))
+        print("Top 10 dst ip: ", dict(self.dst_stats.most_common(10)))
         print()
-        print("Counter src port: ", dict(self.src_port_stats.most_common(10)))
+        print("Top 10 src port: ", dict(self.src_port_stats.most_common(10)))
         print()
-        print("Counter dst port: ", dict(self.dst_port_stats.most_common(10)))
+        print("Top 10 dst port: ", dict(self.dst_port_stats.most_common(10)))
         print()
         print(self.priorities)
 

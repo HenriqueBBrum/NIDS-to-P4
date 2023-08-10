@@ -1,7 +1,6 @@
 import attr
 
-
-### Class representing a rule.
+# Class representing a NIDS rule.
 class Rule(object):
     def __init__(self, rule, header, options, has_negation):
         self.rule = rule

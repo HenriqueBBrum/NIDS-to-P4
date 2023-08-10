@@ -1,7 +1,10 @@
 ### Main file that compiles a Snort rule file according to the snort.conf and classification.conf to P4 table entries
 # Args: config path, rules_path
-#       - config_path: path to the configuration files
-#       - rules_path: path to a single rule file or to a directory containing multiple rule files
+#       - config_path: Path to the configuration files
+#       - rules_path: Path to a single rule file or to a directory containing multiple rule files
+#       - compiler_goal: Compiler goals, such as the p4 target and the rules priority
+#       - compiler_output_file: Output file path for the compiled p4 table entries
+
 
 
 ## Standard and 3rd-party imports
@@ -17,11 +20,10 @@ from snort_rule_parser.rules_parser import get_rules, dedup_rules, adjust_rules
 from snort_rule_parser.rule_statistics import RuleStatistics
 from rules_to_P4 import rules_to_P4_table_match, dedup_table_matches, reduce_table_matches, create_table_entries 
 
-# from port_mask import mask_range
 
 
-def main(config_path, rules_path, compiler_goal, table_entries_file="src/p4/p4snort.config"):
-    compiler_goal = parse_compiler_goal(compiler_goal)
+def main(config_path, rules_path, compiler_goal, table_entries_file="p4_table_entries.config"):
+    parsed_compiler_goal = parse_compiler_goal(compiler_goal)
     config = SnortConfiguration(snort_version=2, configuration_dir=config_path)
     print("*" * 80)
     print("*" * 80)
@@ -32,14 +34,14 @@ def main(config_path, rules_path, compiler_goal, table_entries_file="src/p4/p4sn
     print("*" * 80)
     print("*" * 23 + " SNORT RULES TO P4 TABLE ENTRIES STAGE " + "*" * 23+ "\n\n")
     p4_ipv4_table_entries, p4_ipv6_table_entries = rule_to_P4_table_entry_stage(config, modified_rules)
-
+    print(len(p4_ipv4_table_entries), len(p4_ipv6_table_entries))
 
     print("\n\n"+"*" * 80)
     print("*" * 80)
     print("*" * 20 + " PRIORITIZING AND SAVING TABLE ENTRIES " + "*" * 21+ "\n\n")
     combined_table_entries = p4_ipv4_table_entries + p4_ipv6_table_entries
 
-    prioritized_table_entries = prioritize_table_entries(compiler_goal, combined_table_entries)
+    prioritized_table_entries = prioritize_table_entries(parsed_compiler_goal, combined_table_entries)
     save_table_entries(prioritized_table_entries, table_entries_file)
    
    
@@ -98,14 +100,14 @@ def rule_to_P4_table_entry_stage(config, modified_rules):
     print("---- Deduplication of P4 table matches ----")
     deduped_ipv4_table_matches = dedup_table_matches(ipv4_p4_table_matches)
     deduped_ipv6_table_matches = dedup_table_matches(ipv6_p4_table_matches)
-    
-    print("---- Reducing P4 rules ----")
-    reduced_ipv4_table_matches = reduce_table_matches(deduped_ipv4_table_matches)
-    reduced_ipv6_table_matches = reduce_table_matches(deduped_ipv6_table_matches)
+
+    # print("---- Reducing P4 rules ----")
+    # reduced_ipv4_table_matches = reduce_table_matches(deduped_ipv4_table_matches)
+    # reduced_ipv6_table_matches = reduce_table_matches(deduped_ipv6_table_matches)
 
     print("---- Generating table entries ----")
-    p4_ipv4_table_entries, sids_ipv4, rules_qnt_ipv4 = create_table_entries(reduced_ipv4_table_matches, "ipv4_ids")
-    p4_ipv6_table_entires, sids_ipv6, rules_qnt_ipv6 = create_table_entries(reduced_ipv6_table_matches, "ipv6_ids")
+    p4_ipv4_table_entries, sids_ipv4, rules_qnt_ipv4 = create_table_entries(deduped_ipv4_table_matches, "ipv4_ids")
+    p4_ipv6_table_entires, sids_ipv6, rules_qnt_ipv6 = create_table_entries(deduped_ipv6_table_matches, "ipv6_ids")
 
     sids = sids_ipv4 + sids_ipv6
     rules_qnt = rules_qnt_ipv4 + rules_qnt_ipv6
@@ -113,7 +115,7 @@ def rule_to_P4_table_entry_stage(config, modified_rules):
     print("Snort to P4 results: \n")
     print("Total processed p4 rules: {}".format(len(ipv4_p4_table_matches)+len(ipv6_p4_table_matches)))
     print("Total processed p4 rules after deduping: {}".format(len(deduped_ipv4_table_matches)+len(deduped_ipv6_table_matches)))
-    print("Total processed p4 rules reduced: {}".format(len(reduced_ipv4_table_matches)+len(reduced_ipv6_table_matches)))
+    # print("Total processed p4 rules reduced: {}".format(len(reduced_ipv4_table_matches)+len(reduced_ipv6_table_matches)))
 
     return p4_ipv4_table_entries, p4_ipv6_table_entires
 
@@ -130,19 +132,7 @@ def prioritize_table_entries(compiler_goal, table_entries):
     return prioritized_rules
 
 # Returns entries ordered according to the highest priority
-# The bigger the priority number the higher the priority for P4 TABLES ENTRIES
-# WARNING
-# Before calling function "create_table_entries" in "rule_to_P4_table_entry_stage" the priority was according to Snort configuration
-# Snort priority is as follows:
-#          1 - High
-#          2 - Medium
-#          3 - Low
-#          4 - Very low
-# P4 table has the inverse behavior:
-#          1 - Very Low
-#          2 - Low
-#          3 - Medium
-#          4 - High
+# The bigger the priority number the higher the priority for P4 table entries
 def max_severity(table_entries):
     return sorted(table_entries, key=lambda entry: entry.priority, reverse=True) 
 
@@ -160,12 +150,6 @@ def save_table_entries(table_entries, filepath):
     with open(filepath, 'w') as file:
         for table_entry in table_entries:
             file.write(table_entry.to_string()+"\n")
-
-# def compile_p4id_ternary_range_size(rule):
-#     src_size = mask_range(rule.match.src_port_start, rule.match.src_port_end)
-#     dst_size = mask_range(rule.match.dst_port_start, rule.match.dst_port_end)
-#     return len(src_size) * len(dst_size)
-
 
 
 if __name__ == '__main__':

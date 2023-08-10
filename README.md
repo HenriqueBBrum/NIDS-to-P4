@@ -1,1 +1,1 @@
-# improve-P4-ONIDS
+# Improved P4-ONIDS rule compiler
