@@ -68,36 +68,6 @@ def _parse_rules(rule_file):
 
     return parsed_rules, modified_rules
 
-# Deduplicate signature rules with same match. Save each duplicate rule's priority and sid/rev 
-def dedup_rules(config, rules):
-    deduped_rules = {}
-    for rule in rules:
-        rule_id = rule.rule_id()
-       
-        if rule_id not in deduped_rules:
-            deduped_rules[rule_id] = AggregatedRule(header=rule.header, flags=_get_simple_option_value("flags", rule.options, []), \
-                                                            priority_list=[], sid_rev_list=[])
-
-        sid = _get_simple_option_value("sid", rule.options)
-        rev = _get_simple_option_value("rev", rule.options)
-        sid_rev_string = f'{sid}/{rev}'
-
-        classtype = _get_simple_option_value("classtype", rule.options)
-        priority = config.classification_priority.get(classtype)
-        
-        deduped_rules[rule_id].priority_list.append(priority)
-        deduped_rules[rule_id].sid_rev_list.append(sid_rev_string)
-
-    return list(deduped_rules.values())
-
-# Returns value of key in rule options. Option value format: (option_index, [option_index_values])
-def _get_simple_option_value(key, options, default="ERROR"):
-    try:
-        return options[key][1][0]
-    except Exception as e:
-        #print("Error when searching for key {} in rule options \n Returning: {}".format(key, default))
-        return default
-
 # Replace system variables, modify negated ports and group ports
 def adjust_rules(config, rules):
     modified_rules = []
@@ -118,7 +88,9 @@ def adjust_rules(config, rules):
         copied_header['src_port'] = _group_ports_into_ranges(copied_header['src_port'])
         copied_header['dst_port'] = _group_ports_into_ranges(copied_header['dst_port'])
 
-        modified_rules.append(AggregatedRule(copied_header, rule.flags, rule.priority_list, rule.sid_rev_list))
+        rule.header = copied_header
+        
+        modified_rules.append(rule)
 
     return modified_rules
 
@@ -202,16 +174,55 @@ def _group_ports_into_ranges(ports):
             initial_port = -1
     return grouped_ports
 
-# Remove rules that have src IP and dst IP equal to any  or src port and dst port equal to any
-def remove_total_wildcard_rules(rules):
+
+# Deduplicate signature rules with same match. Save each duplicate rule's priority and sid/rev 
+def dedup_rules(config, rules):
+    deduped_rules = {}
+    for rule in rules:
+        rule_id = rule.rule_id()
+       
+        if rule_id not in deduped_rules:
+            deduped_rules[rule_id] = AggregatedRule(header=rule.header, flags=_get_simple_option_value("flags", rule.options, []), \
+                                                            priority_list=[], sid_rev_list=[])
+
+        sid = _get_simple_option_value("sid", rule.options)
+        rev = _get_simple_option_value("rev", rule.options)
+        sid_rev_string = f'{sid}/{rev}'
+
+        classtype = _get_simple_option_value("classtype", rule.options)
+        priority = config.classification_priority.get(classtype)
+        
+        deduped_rules[rule_id].priority_list.append(priority)
+        deduped_rules[rule_id].sid_rev_list.append(sid_rev_string)
+
+    return list(deduped_rules.values())
+
+# Returns value of key in rule options. Option value format: (option_index, [option_index_values])
+def _get_simple_option_value(key, options, default="ERROR"):
+    try:
+        return options[key][1][0]
+    except Exception as e:
+        #print("Error when searching for key {} in rule options \n Returning: {}".format(key, default))
+        return default
+
+
+# Remove udp and tcp rules that have src port and dst port equal to any
+def remove_port_wildcard_rules(rules):
     final_rules = []
     for rule in rules:
         # Assume wildcards IP and ports contain only one object, i.e. the wildcard IP and port values
-        if ((rule.header["proto"] == "udp" or rule.header["proto"] == "tcp")  
+        # Remove rules that are udp or tcp with empty flags that have wildcard src and dst port and with one wildcard IP
+        if ((rule.header["proto"] == "udp" or (rule.header["proto"] == "tcp" and len(rule.flags) == 0))  
             and (len(rule.header["src_port"]) == 1 and len(rule.header["dst_port"]) == 1 
-            and rule.header["src_port"][0] == (range(0, 65536), True) and rule.header["dst_port"][0] == (range(0, 65536), True))):
+            and rule.header["src_port"][0] == (range(0, 65536), True) and rule.header["dst_port"][0] == (range(0, 65536), True))
+            and ((len(rule.header["src_ip"]) == 1 and rule.header["src_ip"][0] == ('0.0.0.0/0', True))
+            or  (len(rule.header["dst_ip"]) == 1 and rule.header["dst_ip"][0] == ('0.0.0.0/0', True)))):
+            print(rule.header, rule.flags)
             continue
         
         final_rules.append(rule)
-
     return final_rules
+
+
+
+

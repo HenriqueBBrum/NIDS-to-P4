@@ -3,7 +3,7 @@ import attr
 # Class representing a NIDS rule.
 class Rule(object):
     def __init__(self, rule, header, options, has_negation):
-        self.rule = rule
+        self.rule = rule # Original rule string
 
         self.header = header
         self.options = options

@@ -16,7 +16,7 @@ import random
 
 ## Local imports
 from snort_config_parser import SnortConfiguration
-from snort_rule_parser.rules_parser import get_rules, dedup_rules, adjust_rules, remove_total_wildcard_rules
+from snort_rule_parser.rules_parser import get_rules, dedup_rules, adjust_rules, remove_port_wildcard_rules
 from snort_rule_parser.rule_statistics import RuleStatistics
 from rules_to_P4 import rules_to_P4_table_match, dedup_table_matches, reduce_table_matches, create_table_entries 
 
@@ -74,22 +74,22 @@ def rule_parsing_stage(config, rules_path):
     stats.print_all()
     
 
-    print("---- Deduplication of rules..... ----")
-    deduped_rules = dedup_rules(config, fixed_bidirectional_rules)
-   
-
     print("---- Adjusting rules. Replacing variables,grouping ports into ranges and adjusting negated port rules..... ----")
-    modified_rules = adjust_rules(config, deduped_rules) # Currently negated IPs are not supported
+    modified_rules = adjust_rules(config, fixed_bidirectional_rules) # Currently negated IPs are not supported
 
+    print("---- Deduplication of rules..... ----")
+    deduped_rules = dedup_rules(config, modified_rules)
+
+   
     print("---- Removing tcp or udp rules with source and destination ports that are wildcards (i.e, any)..... ----")
-    final_rules = remove_total_wildcard_rules(modified_rules) 
+    final_rules = remove_port_wildcard_rules(deduped_rules) 
 
     print("\nResults:")
     print("Total original rules: {}".format(len(original_rules)))
     print("Total rules after fixing bidirectional rules: {}".format(len(fixed_bidirectional_rules)))
-    print("Total processed rules dedup: {}".format(len(deduped_rules)))
     print("Total non-negated IP rules: {}".format(len(modified_rules)))
-    print("Total rules after removing total port wildcards: {}".format(len(final_rules)))
+    print("Total processed rules dedup: {}".format(len(deduped_rules)))
+    print("Total rules after removing port wildcards: {}".format(len(final_rules)))
 
     return final_rules
 
