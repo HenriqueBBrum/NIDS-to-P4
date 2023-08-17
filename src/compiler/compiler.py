@@ -16,7 +16,7 @@ import random
 
 ## Local imports
 from snort_config_parser import SnortConfiguration
-from snort_rule_parser.rules_parser import get_rules, dedup_rules, adjust_rules
+from snort_rule_parser.rules_parser import get_rules, dedup_rules, adjust_rules, remove_total_wildcard_rules
 from snort_rule_parser.rule_statistics import RuleStatistics
 from rules_to_P4 import rules_to_P4_table_match, dedup_table_matches, reduce_table_matches, create_table_entries 
 
@@ -43,8 +43,7 @@ def main(config_path, rules_path, compiler_goal, table_entries_file="output/p4_t
     prioritized_table_entries = prioritize_table_entries(parsed_compiler_goal, combined_table_entries)
     save_table_entries(prioritized_table_entries, table_entries_file)
    
-   
-
+# Parses the compiler goal for the target platform and the prioritization scheme
 def parse_compiler_goal(compiler_goal_path):
     VALID_TARGET_PLATFORMS = {"bmv2"}
     VALID_TARGET_GOALS = {"max_severity": max_severity, "max_rules": max_rules, "random_rules": random_rules}
@@ -82,13 +81,17 @@ def rule_parsing_stage(config, rules_path):
     print("---- Adjusting rules. Replacing variables,grouping ports into ranges and adjusting negated port rules..... ----")
     modified_rules = adjust_rules(config, deduped_rules) # Currently negated IPs are not supported
 
+    print("---- Removing tcp or udp rules with source and destination ports that are wildcards (i.e, any)..... ----")
+    final_rules = remove_total_wildcard_rules(modified_rules) 
+
     print("\nResults:")
     print("Total original rules: {}".format(len(original_rules)))
     print("Total rules after fixing bidirectional rules: {}".format(len(fixed_bidirectional_rules)))
     print("Total processed rules dedup: {}".format(len(deduped_rules)))
     print("Total non-negated IP rules: {}".format(len(modified_rules)))
+    print("Total rules after removing total port wildcards: {}".format(len(final_rules)))
 
-    return modified_rules
+    return final_rules
 
 # Functions related to the conversion of parsed Snort/Suricata rule to P4 tables and the subsequent deduplication, 
 # reduction and saving of table entries

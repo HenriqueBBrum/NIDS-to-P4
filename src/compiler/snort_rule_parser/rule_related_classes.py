@@ -7,7 +7,7 @@ class Rule(object):
 
         self.header = header
         self.options = options
-        self.has_negation = has_negation
+        self.has_negation = has_negation # IP or port is negated
 
         self.data = {"header": self.header, "options": self.options}
         self.all = self.data

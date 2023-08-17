@@ -69,9 +69,9 @@ def _parse_rules(rule_file):
     return parsed_rules, modified_rules
 
 # Deduplicate signature rules with same match. Save each duplicate rule's priority and sid/rev 
-def dedup_rules(config, p4_rules):
+def dedup_rules(config, rules):
     deduped_rules = {}
-    for rule in p4_rules:
+    for rule in rules:
         rule_id = rule.rule_id()
        
         if rule_id not in deduped_rules:
@@ -99,9 +99,9 @@ def _get_simple_option_value(key, options, default="ERROR"):
         return default
 
 # Replace system variables, modify negated ports and group ports
-def adjust_rules(config, deduped_rules):
+def adjust_rules(config, rules):
     modified_rules = []
-    for rule in deduped_rules:
+    for rule in rules:
         copied_header = copy.deepcopy(rule.header)
        
         copied_header['src_ip'] = _replace_system_variables(copied_header['src_ip'],  config.ip_addresses)
@@ -201,3 +201,17 @@ def _group_ports_into_ranges(ports):
             count = 0
             initial_port = -1
     return grouped_ports
+
+# Remove rules that have src IP and dst IP equal to any  or src port and dst port equal to any
+def remove_total_wildcard_rules(rules):
+    final_rules = []
+    for rule in rules:
+        # Assume wildcards IP and ports contain only one object, i.e. the wildcard IP and port values
+        if ((rule.header["proto"] == "udp" or rule.header["proto"] == "tcp")  
+            and (len(rule.header["src_port"]) == 1 and len(rule.header["dst_port"]) == 1 
+            and rule.header["src_port"][0] == (range(0, 65536), True) and rule.header["dst_port"][0] == (range(0, 65536), True))):
+            continue
+        
+        final_rules.append(rule)
+
+    return final_rules

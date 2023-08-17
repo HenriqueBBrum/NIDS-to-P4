@@ -7,6 +7,9 @@ import struct
 from P4_related_classes import *
 
 PROTO_MAPPING = {'icmp': 1, 'ip': 4, 'tcp': 6, 'udp': 17}
+IPv4_ETHER_TYPE = 2048
+IPv6_ETHER_TYPE = 34525
+
 MAX_PRIORITY = 4 # NIDS rules max priority
 
 
@@ -36,7 +39,7 @@ def _rule_to_P4_table_match(parsed_rule):
     ipv4_flat_P4_rules, ipv6_flat_P4_rules = [], []
     for src_ip in src_ip_list:
         for dst_ip in dst_ip_list:
-            if _ip_type(src_ip[0]) != _ip_type(dst_ip[0]):
+            if _ip_address_type(src_ip[0]) != _ip_address_type(dst_ip[0]):
                     print("IPs in different version")
                     continue
                 
@@ -45,7 +48,7 @@ def _rule_to_P4_table_match(parsed_rule):
                     P4_rule_match = _create_P4_table_match(proto, src_ip[0], src_port[0], dst_ip[0], dst_port[0], parsed_rule.flags)
                     P4_rule = P4AggregatedMatch(P4_rule_match, parsed_rule.priority_list, parsed_rule.sid_rev_list)
 
-                    if _ip_type(src_ip[0]) == IPv4Address:
+                    if _ip_address_type(src_ip[0]) == IPv4Address:
                         ipv4_flat_P4_rules.append(P4_rule)
                     else:
                         ipv6_flat_P4_rules.append(P4_rule)
@@ -54,7 +57,7 @@ def _rule_to_P4_table_match(parsed_rule):
     return ipv4_flat_P4_rules, ipv6_flat_P4_rules
 
 # Checks the type of a string representing an IP address
-def _ip_type(ip):
+def _ip_address_type(ip):
     no_network = ip.split("/")[0]
     return type(ip_address(no_network))
 
@@ -62,6 +65,12 @@ def _ip_type(ip):
 def _create_P4_table_match(proto, src_ip, src_port, dst_ip, dst_port, flags):
     p4_match_rule = P4Match()
     p4_match_rule.proto = PROTO_MAPPING.get(proto, None)
+    if proto == 'ip':
+        if _ip_address_type(src_ip) == IPv4Address:
+            p4_match_rule.proto = IPv4_ETHER_TYPE
+        else:
+            p4_match_rule.proto = IPv6_ETHER_TYPE
+
 
     p4_match_rule.src_network, p4_match_rule.src_addr, p4_match_rule.src_addr_mask = _get_IP_address_and_mask(src_ip)
     p4_match_rule.src_port = src_port
@@ -74,19 +83,19 @@ def _create_P4_table_match(proto, src_ip, src_port, dst_ip, dst_port, flags):
     return p4_match_rule
 
 # Separates a CIDR based IP into an address and a mask
-def _get_IP_address_and_mask(_ip_network):
-    if _ip_type(_ip_network) == IPv4Address:
-        if "/" not in _ip_network:
-            _ip_network += "/32"
+def _get_IP_address_and_mask(_ip):
+    if _ip_address_type(_ip) == IPv4Address:
+        if "/" not in _ip:
+            _ip += "/32"
         IP_type = socket.AF_INET
     else:
-        if "/" not in _ip_network:
-            _ip_network += "/128"
+        if "/" not in _ip:
+            _ip += "/128"
         IP_type = socket.AF_INET6
 
-    network = ip_network(_ip_network, False)
+    network = ip_network(_ip, False)
     try:
-        addr, net_bits = _ip_network.split('/')
+        addr, net_bits = _ip.split('/')
         host_bits = 32 - int(net_bits)
         mask = socket.inet_ntoa(struct.pack('!I', (1 << 32) - (1 << host_bits)))
         return network, addr, mask

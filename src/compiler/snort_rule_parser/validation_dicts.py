@@ -1,4 +1,4 @@
-# This file contains sets and dictionaries with the names of possible options and classification configs.
+# This file contains sets and dictionaries with the names of possible options and classification configs for Snort rules.
 
 from typing import Any
 
