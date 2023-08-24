@@ -254,7 +254,7 @@ def create_table_entries(rules, table_name):
     for rule in rules:
         count += 1
         table_entry = P4TableEntry(table=table_name,
-                                       action='redirect',
+                                       action='clone_to_ids',
                                        priority=(MAX_PRIORITY - rule.min_priority()),
                                        agg_match=rule)
         
