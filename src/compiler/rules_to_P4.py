@@ -28,7 +28,7 @@ def rules_to_P4_table_match(rules, config):
 def _rule_to_P4_table_match(parsed_rule):
     proto = parsed_rule.header.get('proto')
     if proto not in PROTO_MAPPING:
-        print("No mapping for proto {}".format(proto))
+        print("WARNING -- No mapping for proto {}".format(proto))
         return [], []
         
     src_ip_list = parsed_rule.header.get('src_ip')
@@ -40,7 +40,7 @@ def _rule_to_P4_table_match(parsed_rule):
     for src_ip in src_ip_list:
         for dst_ip in dst_ip_list:
             if _ip_address_type(src_ip[0]) != _ip_address_type(dst_ip[0]):
-                    print("IPs in different version")
+                    print("WARNING -- IPs in different version")
                     continue
                 
             for src_port in src_port_list:
@@ -100,7 +100,7 @@ def _get_IP_address_and_mask(_ip):
         mask = socket.inet_ntoa(struct.pack('!I', (1 << 32) - (1 << host_bits)))
         return network, addr, mask
     except Exception as e:
-        print("Error on ip network {}: {}".format(ip_network, e))
+        print("WARNING -- Error on ip network {}: {}".format(ip_network, e))
 
     return _get_IP_address_and_mask('255.255.255.255')
 
@@ -131,7 +131,7 @@ def _convert_TCP_flags_to_binary(flags_input, rule=None):
                      if invalid_flag not in supported_flag_values]
 
     if len(invalid_flags) != 0:
-        print("Not supported flags {} found in {} from {} - {}".format(invalid_flags, flags, flags_input, rule))
+        print("WARNING -- Not supported flags {} found in {} from {} - {}".format(invalid_flags, flags, flags_input, rule))
         return f'{0x00:0>8b}'
 
     result_value = 0

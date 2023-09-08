@@ -34,8 +34,6 @@ def get_rules(rules_path, ignored_rule_files):
         parsed_rules, adjusted_rules = _parse_rules(rule_file)
         original_rules.extend(parsed_rules)
         modified_rules.extend(adjusted_rules)
-
-    print(len(original_rules))
     return original_rules, modified_rules
 
 # Parse each rule from a rule file
@@ -116,7 +114,7 @@ def _replace_system_variables(header_field, config_variables):
 def _IP_negated(ip_list):
     for ip in ip_list:
         if ip[1] == False:
-            print("Negated IPs are not supported ", ip)
+            print("WARNING -- Negated IPs are not supported ", ip)
             return True
 
     return False
@@ -202,7 +200,7 @@ def _get_simple_option_value(key, options, default="ERROR"):
     try:
         return options[key][1][0]
     except Exception as e:
-        #print("Error when searching for key {} in rule options \n Returning: {}".format(key, default))
+        print("WARNING -- Error when searching for key {} in rule options \n Returning: {}".format(key, default))
         return default
 
 
@@ -217,7 +215,6 @@ def remove_port_wildcard_rules(rules):
             and rule.header["src_port"][0] == (range(0, 65536), True) and rule.header["dst_port"][0] == (range(0, 65536), True))
             and ((len(rule.header["src_ip"]) == 1 and rule.header["src_ip"][0] == ('0.0.0.0/0', True))
             or  (len(rule.header["dst_ip"]) == 1 and rule.header["dst_ip"][0] == ('0.0.0.0/0', True)))):
-            print(rule.header, rule.flags)
             continue
         
         final_rules.append(rule)

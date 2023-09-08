@@ -55,7 +55,7 @@ class Parser(object):
         header = list(filter(None, header))
         size = len(header)
         if size == 2:
-            print("The new snort3 rule format without IPs and Port is not supported")
+            print("WARNING -- The new Snort 3 rule format without IPs and Port is not supported by this compiler as of now")
             return {}, False
 
         if not size == 7 and not size == 1:
