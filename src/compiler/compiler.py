@@ -51,9 +51,6 @@ def parse_compiler_goal(compiler_goal_path):
     with open(compiler_goal_path, 'r') as compiler_goal_file:
         compiler_goal = load(compiler_goal_file)
 
-    # if compiler_goal["table_size_limit"] < 1:
-    #     raise Exception(f'Invalid table size: {compiler_goal["table_size_limit"]}')
-
     if compiler_goal["target_platform"].lower() not in VALID_TARGET_PLATFORMS:
         raise Exception(f'Target platform not supported: {compiler_goal["target_platform"]}')
     
@@ -103,7 +100,7 @@ def rule_to_P4_table_entry_stage(config, modified_rules):
     deduped_ipv4_table_matches = dedup_table_matches(ipv4_p4_table_matches)
     deduped_ipv6_table_matches = dedup_table_matches(ipv6_p4_table_matches)
 
-    # print("---- Reducing P4 rules ----")
+    print("---- Reducing P4 rules ----")
     reduced_ipv4_table_matches = reduce_table_matches(deduped_ipv4_table_matches)
     reduced_ipv6_table_matches = reduce_table_matches(deduped_ipv6_table_matches)
 

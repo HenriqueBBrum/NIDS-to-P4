@@ -37,10 +37,6 @@ compiler.registered:
 compiler.emerging: 
 	python3 src/compiler/compiler.py ${SNORT_CONFIG} ${SNORT2_EMERGING_RULES} ${COMPILER_GOAL}
 
-compiler.time_eval:
-	pyinstrument -o $(COMPILER_EXPERIMENTS_DIR)/$(TIME_PROFILE_NAME)$(NUM_OF_FILES).html -r html \
-	src/compiler/compiler.py ${SNORT_CONFIG} ${EVAL_RULES} ${COMPILER_GOAL}
-
 compiler.memory_eval:
 	mprof run --python --output $(COMPILER_EXPERIMENTS_DIR)/$(MEM_PROFILE_NAME)$(NUM_OF_FILES).dat python3 \
 	src/compiler/compiler.py  ${SNORT_CONFIG} ${EVAL_RULES} ${COMPILER_GOAL} 
