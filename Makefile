@@ -4,7 +4,7 @@ SNORT_COMMUNITY_RULES=etc/rules/snort-community
 SNORT2_EMERGING_RULES=etc/rules/snort2-emerging
 SNORT3_REGISTERED_RULES=etc/rules/snort3-registered
 
-SNORT_CONFIG=etc/config
+SNORT_CONFIG=etc/configuration
 COMPILER_GOAL=etc/compiler_goal.json
 
 
