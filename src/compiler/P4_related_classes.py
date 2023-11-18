@@ -75,5 +75,9 @@ class P4TableEntry(object):
     def to_string(self):
         params = self.params if self.params and type(self.params) == list else []
         parsed_params = " ".join(params)
+        if not params: 
+            return f'table_add {self.table} {self.action} {self.agg_match.match.to_string()} => {self.priority}'
+
         return f'table_add {self.table} {self.action} {self.agg_match.match.to_string()} => {parsed_params} {self.priority}'
+
 
