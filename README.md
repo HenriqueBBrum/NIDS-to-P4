@@ -24,6 +24,9 @@ For more information, go to the `src/compiler.py` file and check the other files
 
 ## Usage guide
 
+> First, make sure Python3 is installed and the python3 command is avaiable.
+
+
 Clone this repo:
 
 ```
@@ -52,6 +55,8 @@ make compiler.registered
 
 
 ### Evaluate memory usage and time duration
+
+> Install mprof: ```pip install memory_profiler``` and add mprof's bin location to the PATH variable 
 
 To evaluate the memory usage, run the following command:
 
