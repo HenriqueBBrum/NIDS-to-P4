@@ -1,6 +1,6 @@
 COMPILER_EXPERIMENTS_DIR=experiments/compiler_eval
 
-SNORT_COMMUNITY_RULES=etc/rules/snort-community
+SNORT_COMMUNITY_RULES=etc/rules/snort3-community
 SNORT2_EMERGING_RULES=etc/rules/snort2-emerging
 SNORT3_REGISTERED_RULES=etc/rules/snort3-registered
 
