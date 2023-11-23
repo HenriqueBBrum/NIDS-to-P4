@@ -68,7 +68,6 @@ def rule_parsing_stage(config, rules_path):
     print("---- Splitting bidirectional rules..... ----")
     original_rules, fixed_bidirectional_rules = get_rules(rules_path, ignored_rule_files) # Get all rules from multiple files or just one
     stats = RuleStatistics(config, original_rules)
-    stats.print_all()
     
 
     print("---- Adjusting rules. Replacing variables,grouping ports into ranges and adjusting negated port rules..... ----")
@@ -80,6 +79,8 @@ def rule_parsing_stage(config, rules_path):
    
     print("---- Removing tcp or udp rules with source and destination ports that are wildcards (i.e, any)..... ----")
     final_rules = remove_port_wildcard_rules(deduped_rules) 
+
+    stats.print_all()
 
     print("\nResults:")
     print("Total original rules: {}".format(len(original_rules)))

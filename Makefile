@@ -1,4 +1,4 @@
-COMPILER_EXPERIMENTS_DIR=experiments/compiler_eval
+COMPILER_EXPERIMENTS_DIR=experiments/memory_eval
 
 SNORT_COMMUNITY_RULES=etc/rules/snort3-community
 SNORT2_EMERGING_RULES=etc/rules/snort2-emerging
