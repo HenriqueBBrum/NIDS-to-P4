@@ -1,5 +1,5 @@
 ### This file contains a class that parsers the network variables defined by snort
-##  Works for Snort 2.* configuration (future versions will inlcude Snort 3.* and Suricata)
+##  Works only configuration file based on Snort 2.* configuration
 
 import re
 
@@ -25,9 +25,6 @@ class SnortConfiguration():
             priority_classification_file = "{}/classification.config".format(self.configuration_dir)
             self.__parse_snort_config(snort_config_file)
             self.__parse_classification_priority(priority_classification_file)
-        elif(self.snort_version == 3):
-            snort_lua = "{}/snort.lua".format(self.configuration_dir) 
-            snort_defaults_lua = "{}/snort_defaults.lua".format(self.configuration_dir) 
 
 
 
