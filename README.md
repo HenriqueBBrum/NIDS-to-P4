@@ -33,7 +33,7 @@ Clone this repo:
 git clone https://github.com/HenriqueBBrum/NIDS-to-P4.git
 ```
 
-There are three supported signature datasets, `Snort 2&3 Community`, `Snort 2 Emerging Threats`, and `Snort 3 Registered`. After cloning the repo in a computer with Python 3 installed, run one of the following commands to generate your P4 table entries output file. The resulting P4 table entries file is saved in the `output` folder. 
+There are three supported signature datasets, `Snort 2&3 Community`, `Snort 2 Emerging Threats`, and `Snort 3 Registered`. After cloning the repo in a computer with Python 3 installed, run one of the following commands to generate your P4 table entries output file. The resulting P4 table entries file is saved in the `output` folder. This file can be used without modificatioms with p4app, the only condition is that the P4 dataplane must have the appropriate set of tables defined.
 
 
 To generate an output file with P4 table entries from the COMMUNITY rulesets:
