@@ -140,7 +140,7 @@ def max_rules(table_entries):
       
 # Returns random entries
 def random_rules(table_entries):
-    return random.sample(table_entries)
+    return random.sample(table_entries, len(table_entries))
 
 # Saves the list of table entries into a file
 def save_table_entries(table_entries, filepath):
