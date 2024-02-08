@@ -106,8 +106,8 @@ def rule_to_P4_table_entry_stage(config, modified_rules):
     reduced_ipv6_table_matches = reduce_table_matches(deduped_ipv6_table_matches)
 
     print("---- Generating table entries ----")
-    p4_ipv4_table_entries, sids_ipv4, rules_qnt_ipv4 = create_table_entries(reduced_ipv4_table_matches, "ipv4_ids")
-    p4_ipv6_table_entires, sids_ipv6, rules_qnt_ipv6 = create_table_entries(reduced_ipv6_table_matches, "ipv6_ids")
+    p4_ipv4_table_entries, sids_ipv4, rules_qnt_ipv4 = create_table_entries(reduced_ipv4_table_matches, "ipv4_nids")
+    p4_ipv6_table_entires, sids_ipv6, rules_qnt_ipv6 = create_table_entries(reduced_ipv6_table_matches, "ipv6_nids")
 
     print("Snort to P4 results: \n")
     print("Total processed p4 rules: {}".format(len(ipv4_p4_table_matches)+len(ipv6_p4_table_matches)))
